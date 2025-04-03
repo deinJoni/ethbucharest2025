@@ -61,7 +61,7 @@ export default function App() {
             your crypto portfolio
           </p>
 
-          <ConnectWallet className="bg-sky-800 hover:bg-sky-900 rounded-md border-none text-white min-w-[350px] text-center py-5 font-medium transition-all shadow-md hover:shadow-lg [&>*]:text-white" />
+          <ConnectWallet className="bg-sky-800 hover:bg-sky-900 rounded-md border-none  min-w-[350px] text-center py-5 font-medium transition-all shadow-md hover:shadow-lg text-white" />
 
           <span className="text-sm text-gray-500 mt-2">
             Use your own current account or set one up via Base SmartWallet
