@@ -17,23 +17,32 @@ class RiskProfileUpdate(BaseModel):
 @router.post("/", response_model=WalletResponse)
 def create_wallet(wallet: WalletCreate, db: Session = Depends(get_db)):
     """
-    Create a new wallet or return existing one if the address already exists
+    Create a new wallet or return existing one if the address already exists.
+    If wallet exists and risk_profile is provided, updates the risk profile.
     """
     # Check if wallet already exists
     existing_wallet = db.query(Wallet).filter(Wallet.address == wallet.address).first()
     
     if existing_wallet:
-        # Return the existing wallet if found
+        # If risk_profile is provided, update the existing wallet
+        if hasattr(wallet, 'risk_profile') and wallet.risk_profile is not None:
+            existing_wallet.risk_profile = wallet.risk_profile
+            db.commit()
+            db.refresh(existing_wallet)
+        # Return the existing wallet (updated if applicable)
         return existing_wallet
     
     # Create new wallet if it doesn't exist
     new_wallet = Wallet(address=wallet.address)
+    # Set risk_profile if provided
+    if hasattr(wallet, 'risk_profile') and wallet.risk_profile is not None:
+        new_wallet.risk_profile = wallet.risk_profile
+    
     db.add(new_wallet)
     db.commit()
     db.refresh(new_wallet)
     
     return new_wallet
-
 @router.get("/{address}", response_model=WalletResponse)
 def get_wallet(address: str, db: Session = Depends(get_db)):
     """
