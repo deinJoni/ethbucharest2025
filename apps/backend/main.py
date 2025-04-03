@@ -2,7 +2,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import token_metrics
+from routes import token_metrics
 from core.config import settings
 from core.database import create_tables
 from routes.wallet import router as wallet_router
