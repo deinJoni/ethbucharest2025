@@ -2,7 +2,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import items, users
+from routers import items, users, auth
 from core.config import settings
 
 app = FastAPI(
@@ -23,6 +23,7 @@ app.add_middleware(
 # Include routers
 app.include_router(items.router)
 app.include_router(users.router)
+app.include_router(auth.router)
 
 @app.get("/")
 async def root():
