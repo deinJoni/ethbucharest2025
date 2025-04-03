@@ -1,7 +1,10 @@
 import '@coinbase/onchainkit/styles.css';
 import type { Metadata } from 'next';
 import './globals.css';
-import { Providers } from './providers';
+import Navbar from '@/components/Navbar';
+import { OnchainKitProvider } from '@/providers/OnchainKitProvider';
+import { ThemeProvider } from '@/providers/ThemeProvider';
+import { Toaster } from '@/components/ui/toaster';
 
 export const metadata: Metadata = {
   title: process.env.NEXT_PUBLIC_ONCHAINKIT_PROJECT_NAME,
@@ -13,10 +16,22 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+
   return (
     <html lang="en">
-      <body className="bg-background dark">
-        <Providers>{children}</Providers>
+      <body className="bg-background">
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <OnchainKitProvider>
+            <Navbar />
+            {children}
+          </OnchainKitProvider>
+          <Toaster />
+        </ThemeProvider>
       </body>
     </html>
   );
