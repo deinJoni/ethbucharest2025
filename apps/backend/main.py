@@ -2,8 +2,9 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import items, users, auth
 from core.config import settings
+from core.database import create_tables
+from routes.wallet import router as wallet_router
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -20,10 +21,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Create database tables
+create_tables()
+
 # Include routers
-app.include_router(items.router)
-app.include_router(users.router)
-app.include_router(auth.router)
+app.include_router(wallet_router)
 
 @app.get("/")
 async def root():
