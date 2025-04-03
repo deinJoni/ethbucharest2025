@@ -96,6 +96,34 @@ const Preferences = ({ address }: { address: string }) => {
     }
   };
 
+  const handleSkip = async () => {
+    setIsSubmitting(true);
+    try {
+      // Default to SAFE risk profile when skipping
+      const safeRiskProfile = "SAFE";
+      console.log("Skipping, defaulting to:", safeRiskProfile);
+
+      const res = await axios.post(
+        `${process.env.NEXT_PUBLIC_API_URL}/wallets`,
+        {
+          address: address,
+          risk_profile: safeRiskProfile,
+        },
+        {
+          headers: {
+            "X-Skip-Browser-Warning": "true",
+            "ngrok-skip-browser-warning": "69420",
+          },
+        }
+      );
+      setOpen(false);
+    } catch (error) {
+      console.error("Error saving default preferences:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   useEffect(() => {
     updatePreferences();
   }, []);
@@ -240,10 +268,18 @@ const Preferences = ({ address }: { address: string }) => {
           </RadioGroup>
         </div>
 
-        <DialogFooter className="mt-6">
+        <DialogFooter className="mt-6 flex gap-2 sm:justify-between">
+          <Button
+            onClick={handleSkip}
+            variant="outline"
+            className="w-full sm:w-auto"
+            disabled={isSubmitting}
+          >
+            Skip
+          </Button>
           <Button
             onClick={handleSubmit}
-            className="w-full"
+            className="w-full sm:w-auto"
             disabled={isSubmitting}
           >
             {isSubmitting ? "Saving..." : "Save Preferences"}
