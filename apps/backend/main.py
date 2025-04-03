@@ -2,6 +2,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from routers import items, users, auth, token_metrics
 from core.config import settings
 from core.database import create_tables
 from routes.wallet import router as wallet_router
@@ -26,6 +27,7 @@ create_tables()
 
 # Include routers
 app.include_router(wallet_router)
+app.include_router(token_metrics.router)
 
 @app.get("/")
 async def root():

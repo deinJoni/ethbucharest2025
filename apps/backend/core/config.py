@@ -20,8 +20,11 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str
     
+    # Token Metrics
+    TOKEN_METRICS_API_KEY: str
+    
     class Config:
-        env_file = ".env.example"
+        env_file = ".env"
         case_sensitive = True
 
 settings = Settings()
