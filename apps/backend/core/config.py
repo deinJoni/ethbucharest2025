@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     # Token Metrics
     TOKEN_METRICS_API_KEY: str
     
+    # OpenAI
+    OPENAI_API_KEY: str
+    
     class Config:
         env_file = ".env"
         case_sensitive = True

@@ -6,7 +6,8 @@ from routers import token_metrics
 from core.config import settings
 from core.database import create_tables
 from routes.wallet import router as wallet_router
-
+from routes.token_metrics import router as token_metrics
+from routes.agents import router as agents_router
 app = FastAPI(
     title=settings.PROJECT_NAME,
     description="FastAPI backend for ETH Bucharest 2025",
@@ -27,7 +28,8 @@ create_tables()
 
 # Include routers
 app.include_router(wallet_router)
-app.include_router(token_metrics.router)
+app.include_router(token_metrics)
+app.include_router(agents_router)
 
 @app.get("/")
 async def root():
