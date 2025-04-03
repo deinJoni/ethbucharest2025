@@ -1,13 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 
 from core.database import get_db
-from models.wallet import Wallet, WalletCreate, WalletResponse
+from models.wallet import Wallet, WalletCreate, WalletResponse, RiskProfile
 
 router = APIRouter(
     prefix="/wallets",
     tags=["wallets"]
 )
+
+class RiskProfileUpdate(BaseModel):
+    address: str
+    risk_profile: RiskProfile
 
 @router.post("/", response_model=WalletResponse)
 def create_wallet(wallet: WalletCreate, db: Session = Depends(get_db)):
@@ -32,7 +37,7 @@ def create_wallet(wallet: WalletCreate, db: Session = Depends(get_db)):
 @router.get("/{address}", response_model=WalletResponse)
 def get_wallet(address: str, db: Session = Depends(get_db)):
     """
-    Get information about a specific wallet
+    Get information about a specific wallet including risk profile if available
     """
     wallet = db.query(Wallet).filter(Wallet.address == address).first()
     if not wallet:
@@ -40,4 +45,33 @@ def get_wallet(address: str, db: Session = Depends(get_db)):
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Wallet with address {address} not found"
         )
+    return wallet
+
+@router.put("/risk-profile", response_model=WalletResponse)
+def update_risk_profile(update_data: RiskProfileUpdate, db: Session = Depends(get_db)):
+    """
+    Update the risk profile for a specific wallet
+    
+    Example request body:
+    {
+        "address": "0xabc123...",
+        "risk_profile": "High Risk, High Reward"
+    }
+    
+    Valid risk_profile values: 
+    - "High Risk, High Reward" (for HIGH_RISK)
+    - "Balanced & Strategic" (for BALANCED)
+    - "Safe & Steady" (for SAFE)
+    """
+    wallet = db.query(Wallet).filter(Wallet.address == update_data.address).first()
+    if not wallet:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Wallet with address {update_data.address} not found"
+        )
+    
+    wallet.risk_profile = update_data.risk_profile
+    db.commit()
+    db.refresh(wallet)
+    
     return wallet
