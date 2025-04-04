@@ -72,6 +72,7 @@ async def ask_example_agent(req: AgentRequest):
     return {"message": "Example agent endpoint not fully implemented yet"}
 
 # Update route to use new models and simplified logic
+@router.post("/crypto_sma_agent/", response_model=SMAResponse)
 @router.post("/crypto_sma_agent", response_model=SMAResponse)
 async def ask_crypto_sma_agent(req: SMARequest): # Use SMARequest
     try:
@@ -161,6 +162,7 @@ async def ask_crypto_sma_agent(req: SMARequest): # Use SMARequest
         return SMAResponse(analysis=None, error=f"An unexpected server error occurred: {str(e)}", steps=None)
 
 # Modified endpoint for Bounce Hunter
+@router.post("/bounce_hunter_agent/", response_model=SMAResponse)
 @router.post("/bounce_hunter_agent", response_model=SMAResponse) # Use SMAResponse model
 async def ask_bounce_hunter_agent(req: SMARequest): # Use SMARequest
     # The agent graph now expects a dictionary input directly
@@ -224,6 +226,7 @@ async def ask_bounce_hunter_agent(req: SMARequest): # Use SMARequest
         return SMAResponse(analysis=None, error=f"An unexpected server error occurred: {str(e)}", steps=None)
 
 # New endpoint for Crypto Oracle Agent
+@router.post("/crypto_oracle_agent/", response_model=OracleResponse)
 @router.post("/crypto_oracle_agent", response_model=OracleResponse)
 async def ask_crypto_oracle_agent(req: OracleRequest):
     # Construct input data matching the agent state
@@ -296,6 +299,7 @@ async def ask_crypto_oracle_agent(req: OracleRequest):
         return OracleResponse(analysis=None, error=f"An unexpected server error occurred: {str(e)}", steps=None)
 
 # --- New Endpoint for Manager Agent ---
+@router.post("/analysis_manager/", response_model=ManagerResponse)
 @router.post("/analysis_manager", response_model=ManagerResponse)
 async def ask_analysis_manager(req: ManagerRequest):
     """
