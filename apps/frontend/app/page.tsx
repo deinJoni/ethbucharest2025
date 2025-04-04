@@ -44,29 +44,28 @@ export default function App() {
         </div>
 
         {/* Centered label with semi-transparent background */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="bg-black/40 backdrop-blur-sm p-6 rounded-lg max-w-md text-center">
-            <h1 className="text-3xl font-bold text-white mb-2">
-              Web3 Portfolio Analyzer
+        <div className="absolute inset-0 flex items-center justify-left left-8">
+          <div className="max-w-lg text-lefts">
+            <h1 className="text-5xl font-bold text-white mb-2">
+              Get a portfolio managers opinion about your assets.
             </h1>
-            <p className="text-white/90 text-lg">
-              Get insights into your crypto portfolio with advanced analytics
-              and AI-powered recommendations
-            </p>
+            <h2 className="text-3xl font-bold text-white mb-2">
+              Based on what multiple AI agents think and your preferences.
+            </h2>
           </div>
         </div>
 
         {/* ETH Bucharest logo in bottom left */}
-        <div className="absolute bottom-8 left-8 flex flex-col items-center">
-          <span className="text-md text-white font-medium drop-shadow-md">
+        <div className="absolute bottom-8 left-8 flex flex-col items-left uppercase ">
+          <span className="text-sm text-white font-medium drop-shadow-md tracking-widest">
             developed during
           </span>
           <Image
             src="/icons/eth_bucharest_logo.png"
             alt="ETH Bucharest Logo"
-            width={120}
-            height={120}
-            className="mt-1 drop-shadow-lg"
+            width={150}
+            height={55}
+            className="mt-1 ethBucharestLogo drop-shadow-lg"
           />
         </div>
       </div>
@@ -74,19 +73,11 @@ export default function App() {
       {/* Right side with connect wallet */}
       <div className="h-full w-full flex items-center justify-center relative bg-gradient-to-b from-white to-gray-50 p-6">
         <div className="flex flex-col justify-center items-center text-center gap-4 max-w-md">
-          <h2 className="text-2xl font-semibold text-gray-800 mb-2">
-            Welcome to Your Portfolio Analyzer
-          </h2>
-          <p className="text-gray-600 mb-4">
-            Connect your wallet to get personalized insights and analytics for
-            your crypto portfolio
+          <p className="text-sky-600 font-bold mb-0">Hit the button below to get started</p>
+          <ConnectWallet className="bg-sky-800 hover:bg-sky-900 rounded-md border-none  min-w-[350px] text-center text-4xl uppercase py-5 px-10 font-bold tracking-widest	 transition-all shadow-md hover:shadow-lg text-white connectButton" />
+          <p className="text-sm text-gray-500 mt-1">
+            Use your own current account <br />or set one up via Base SmartWallet
           </p>
-
-          <ConnectWallet className="bg-sky-800 hover:bg-sky-900 rounded-md border-none  min-w-[350px] text-center py-5 font-medium transition-all shadow-md hover:shadow-lg text-white" />
-
-          <span className="text-sm text-gray-500 mt-2">
-            Use your own current account or set one up via Base SmartWallet
-          </span>
         </div>
 
         {/* Icons container at the bottom */}

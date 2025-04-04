@@ -138,3 +138,9 @@
   75%   { background-position: 10% 10%; }
   100%  { background-position: 0% 0%; background-size: 120% 120%; }
 }
+
+.connectButton,
+.connectButton span {
+  color: #FFFFFF;
+}
+
