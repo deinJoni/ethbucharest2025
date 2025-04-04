@@ -22,7 +22,7 @@ const Navbar = () => {
     if (pathname === '/') return null;
 
     return (
-            <div className="flex w-full items-center justify-end p-4 shadow-md h-[75px]">
+            <div className="flex w-full items-center justify-end p-4 shadow-md h-[75px] rounded-lg">
                 {/* <ModeToggle /> */}
                 <Wallet>
                     <ConnectWallet>
