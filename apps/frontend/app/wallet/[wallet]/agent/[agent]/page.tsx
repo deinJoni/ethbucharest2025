@@ -3,6 +3,7 @@
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import agentsData from "@/data/agents.json";
+import tokensData from "@/data/tokens.json";
 import Link from "next/link";
 
 type Agent = {
@@ -26,6 +27,12 @@ type Agent = {
   alternativeNames: string[];
   riskBreakdown: Record<string, string>;
   apiEndpoint: string;
+};
+
+type Token = {
+  token_id: number;
+  token_name: string;
+  token_symbol: string;
 };
 
 // Stat bar component to display agent stats
@@ -57,6 +64,10 @@ const AgentDetailPage = () => {
   const params = useParams();
   const [agent, setAgent] = useState<Agent | null>(null);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [selectedToken, setSelectedToken] = useState<Token | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<string | null>(null);
 
   useEffect(() => {
     if (params.agent) {
@@ -72,6 +83,28 @@ const AgentDetailPage = () => {
     }
     setLoading(false);
   }, [params.agent, params.wallet, router]);
+
+  const filteredTokens = tokensData.filter(
+    (token) =>
+      token.token_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      token.token_symbol.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const handleTokenSelect = (token: Token) => {
+    setSelectedToken(token);
+    setSearchTerm("");
+    setShowDropdown(false);
+  };
+
+  const analyzeToken = () => {
+    if (selectedToken) {
+      console.log("Analyzing token:", selectedToken);
+      // This would normally be an API call
+      setAnalysisResult(
+        `Analysis for ${selectedToken.token_name} (${selectedToken.token_symbol}) will appear here.`
+      );
+    }
+  };
 
   if (loading) {
     return (
@@ -153,6 +186,77 @@ const AgentDetailPage = () => {
         <div className="md:w-2/3">
           <h1 className="text-3xl font-bold mb-2">{agent.name}</h1>
           <p className="text-xl text-gray-600 mb-6">{agent.description}</p>
+
+          {/* Token Analysis Section */}
+          <div className="mb-8 p-5 border border-gray-200 rounded-lg bg-gray-50">
+            <h2 className="text-2xl font-semibold mb-4">Token Analysis</h2>
+
+            <div className="flex flex-col md:flex-row gap-3 mb-4">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setShowDropdown(true);
+                  }}
+                  onFocus={() => setShowDropdown(true)}
+                  placeholder="Search for a token..."
+                  className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+
+                {showDropdown && searchTerm && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+                    {filteredTokens.length > 0 ? (
+                      filteredTokens.slice(0, 10).map((token) => (
+                        <div
+                          key={token.token_id}
+                          onClick={() => handleTokenSelect(token)}
+                          className="p-3 hover:bg-gray-100 cursor-pointer border-b border-gray-100"
+                        >
+                          <div className="font-medium">{token.token_name}</div>
+                          <div className="text-sm text-gray-600">
+                            {token.token_symbol}
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="p-3 text-gray-500">No tokens found</div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={analyzeToken}
+                disabled={!selectedToken}
+                className={`px-4 py-3 rounded-md ${
+                  selectedToken
+                    ? "bg-blue-600 text-white hover:bg-blue-700"
+                    : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                } transition-colors`}
+              >
+                Analyze Token
+              </button>
+            </div>
+
+            {selectedToken && (
+              <div className="mt-2 mb-4 p-3 bg-blue-50 rounded-md flex items-center">
+                <span className="mr-2 text-blue-600">Selected:</span>
+                <span className="font-medium">{selectedToken.token_name}</span>
+                <span className="ml-2 px-2 py-1 bg-blue-200 text-blue-800 text-sm rounded">
+                  {selectedToken.token_symbol}
+                </span>
+              </div>
+            )}
+
+            {analysisResult && (
+              <div className="mt-4 p-4 border border-blue-200 rounded-md bg-blue-50">
+                <h3 className="font-medium text-lg mb-2">Analysis Result</h3>
+                <p>{analysisResult}</p>
+              </div>
+            )}
+          </div>
 
           {/* Tags */}
           <div className="mb-6 flex flex-wrap gap-2">
