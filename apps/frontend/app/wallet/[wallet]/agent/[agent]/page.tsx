@@ -21,6 +21,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import TokenRedirectSelect from "@/components/TokensRedirectSelect";
 
 type Agent = {
   id: string;
@@ -630,6 +631,7 @@ const AgentDetailPage = () => {
               <SignalResult analysisData={analysisResult} />
             )}
           </div>
+
 
           {/* Personality */}
           {/* <h2 className="text-2xl font-semibold mb-3">Personality</h2>

@@ -78,7 +78,7 @@ export const columns: ColumnDef<Token>[] = [
 export function TokensTable({ data }: { data: Token[] }) {
   const router = useRouter();
   const { address } = useAccount();
-  
+
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
@@ -157,9 +157,9 @@ export function TokensTable({ data }: { data: Token[] }) {
                       {header.isPlaceholder
                         ? null
                         : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
+                          header.column.columnDef.header,
+                          header.getContext()
+                        )}
                     </TableHead>
                   );
                 })}
