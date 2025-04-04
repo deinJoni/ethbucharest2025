@@ -4,4 +4,5 @@ export type Token = {
     name: string;
     amount: string;
     value: string;
+    address: string;
 };

@@ -4,13 +4,17 @@ import React from 'react'
 
 const layout = ({ children }: { children: React.ReactNode }) => {
     return (
-        <div className="w-full h-full grid grid-cols-12">
+        <div className="w-full h-screen flex justify-end">
+            {/* Fixed left column */}
             <div
-                className="col-span-3 w-full h-full relative landingLeft"
-                style={{ backgroundImage: `url('/landing-left-bg.jpg')` }}
+                className="w-1/4 fixed top-0 left-0 h-screen z-10"
+                style={{
+                    backgroundImage: `url('/landing-left-bg.jpg')`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center'
+                }}
             >   
                 <div className="w-full h-screen fixed">
-
                     {/* Our logo in top left */}
                     <div className="absolute top-8 left-8 flex flex-col items-left">
                         <Image
@@ -76,9 +80,13 @@ const layout = ({ children }: { children: React.ReactNode }) => {
 
 
             </div>
-            <div className="col-span-9 px-10 py-4">
-                <Navbar />
-                {children}
+
+            {/* Scrollable content area with padding to account for fixed sidebar */}
+            <div className=" w-3/4 min-h-screen">
+                <div className="px-10 py-4 w-full">
+                    <Navbar />
+                    {children}
+                </div>
             </div>
         </div>
     )

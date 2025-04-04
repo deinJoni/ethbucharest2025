@@ -35,41 +35,48 @@ const WalletPage = () => {
   useEffect(() => {
     const fetchTokenData = async () => {
       if (!address) return;
-
+  
       try {
         setIsLoading(true);
-
+  
         // Get ERC20 token balances for Sepolia
-        const tokenBalances = await Moralis.EvmApi.token.getWalletTokenBalances(
-          {
-            address,
-            chain: "0xaa36a7", // Sepolia chain ID
-          }
-        );
-
+        const tokenBalances = await Moralis.EvmApi.token.getWalletTokenBalances({
+          address,
+          chain: "0xaa36a7", // Sepolia chain ID
+        });
+  
         // Get native balance (ETH) for Sepolia
         const balance = await Moralis.EvmApi.balance.getNativeBalance({
           address,
           chain: "0xaa36a7", // Sepolia chain ID
         });
-
-        setTokens(
-          tokenBalances.result.map((token, index) => ({
-            id: index.toString(),
-            symbol: token.token?.symbol ?? "",
-            name: token.token?.name ?? "",
-            amount: token.amount.toString(),
-            value: token.value,
-          }))
-        );
-
-        setNativeBalance({
-          id: "native",
+  
+        // Create native token object
+        const nativeToken = {
+          id: "0x0000000000000000000000000000000000000000", // Standard address for native ETH
           symbol: "ETH",
           name: "Ethereum",
           amount: balance.result.balance.toString(),
           value: balance.result.balance.toString(),
-        });
+          address: "0x0000000000000000000000000000000000000000",
+        };
+  
+        // Set native balance separately (if you still need this for other components)
+        setNativeBalance(nativeToken);
+        
+        // Map ERC20 tokens
+        const erc20Tokens = tokenBalances.result.map((token, index) => ({
+          id: token.token?.contractAddress?.toString() || "",
+          symbol: token.token?.symbol ?? "",
+          name: token.token?.name ?? "",
+          amount: token.amount.toString(),
+          value: token.value,
+          address: token.token?.contractAddress?.toString() ?? "",
+        }));
+  
+        // Combine native token with ERC20 tokens
+        setTokens([nativeToken, ...erc20Tokens]);
+  
       } catch (err) {
         console.error("Error fetching token data:", err);
         setError("Failed to load token data");
@@ -89,7 +96,6 @@ const WalletPage = () => {
       </div>
     );
   if (error) return <div>Error: {error}</div>;
-  console.log("tokens", tokens);
   return (
     <div className="w-full flex justify-center">
       <Preferences address={address} />
@@ -128,15 +134,14 @@ const WalletPage = () => {
                     Risk Level:
                   </span>
                   <span
-                    className={`px-2 py-1 rounded text-xs ${
-                      agent.riskLevel === "Low"
-                        ? "bg-green-100 text-green-800"
-                        : agent.riskLevel === "Low to Moderate"
+                    className={`px-2 py-1 rounded text-xs ${agent.riskLevel === "Low"
+                      ? "bg-green-100 text-green-800"
+                      : agent.riskLevel === "Low to Moderate"
                         ? "bg-blue-100 text-blue-800"
                         : agent.riskLevel === "Moderate"
-                        ? "bg-yellow-100 text-yellow-800"
-                        : "bg-red-100 text-red-800"
-                    }`}
+                          ? "bg-yellow-100 text-yellow-800"
+                          : "bg-red-100 text-red-800"
+                      }`}
                   >
                     {agent.riskLevel}
                   </span>

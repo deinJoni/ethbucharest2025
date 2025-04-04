@@ -9,6 +9,7 @@ from typing import List, Dict, Any, Optional # Import List, Dict, Any, Optional
 from agents.sma_agent import app as crypto_graph_app
 from agents.bounce_hunter import app as bounce_hunter_graph_app
 from agents.crypto_oracle import app as crypto_oracle_app
+from agents.manager_agent import app as manager_agent_app # Import the new manager app
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -50,6 +51,18 @@ class OracleResponse(BaseModel):
     error: str | None = None
     steps: List[Dict[str, Any]] | None = None
 
+# --- New Models for Manager Agent ---
+class ManagerRequest(BaseModel):
+    token_id: str
+    token_name: Optional[str] = None # User can provide a name, otherwise defaults are used
+
+class ManagerResponse(BaseModel):
+    final_summary: Optional[str] = None
+    sma_analysis: Optional[str] = None
+    bounce_analysis: Optional[str] = None
+    oracle_analysis: Optional[str] = None
+    error: Optional[str] = None # For overall errors or summary of sub-errors
+
 @router.post("/example_agent")
 async def ask_example_agent(req: AgentRequest):
     # Placeholder for the existing example agent logic
@@ -59,6 +72,7 @@ async def ask_example_agent(req: AgentRequest):
     return {"message": "Example agent endpoint not fully implemented yet"}
 
 # Update route to use new models and simplified logic
+@router.post("/crypto_sma_agent/", response_model=SMAResponse)
 @router.post("/crypto_sma_agent", response_model=SMAResponse)
 async def ask_crypto_sma_agent(req: SMARequest): # Use SMARequest
     try:
@@ -148,6 +162,7 @@ async def ask_crypto_sma_agent(req: SMARequest): # Use SMARequest
         return SMAResponse(analysis=None, error=f"An unexpected server error occurred: {str(e)}", steps=None)
 
 # Modified endpoint for Bounce Hunter
+@router.post("/bounce_hunter_agent/", response_model=SMAResponse)
 @router.post("/bounce_hunter_agent", response_model=SMAResponse) # Use SMAResponse model
 async def ask_bounce_hunter_agent(req: SMARequest): # Use SMARequest
     # The agent graph now expects a dictionary input directly
@@ -211,6 +226,7 @@ async def ask_bounce_hunter_agent(req: SMARequest): # Use SMARequest
         return SMAResponse(analysis=None, error=f"An unexpected server error occurred: {str(e)}", steps=None)
 
 # New endpoint for Crypto Oracle Agent
+@router.post("/crypto_oracle_agent/", response_model=OracleResponse)
 @router.post("/crypto_oracle_agent", response_model=OracleResponse)
 async def ask_crypto_oracle_agent(req: OracleRequest):
     # Construct input data matching the agent state
@@ -281,3 +297,59 @@ async def ask_crypto_oracle_agent(req: OracleRequest):
     except Exception as e:
         logger.exception("Unhandled error processing crypto_oracle_agent request")
         return OracleResponse(analysis=None, error=f"An unexpected server error occurred: {str(e)}", steps=None)
+
+# --- New Endpoint for Manager Agent ---
+@router.post("/analysis_manager/", response_model=ManagerResponse)
+@router.post("/analysis_manager", response_model=ManagerResponse)
+async def ask_analysis_manager(req: ManagerRequest):
+    """
+    Orchestrates analysis by running SMA, Bounce Hunter, and Crypto Oracle agents,
+    then synthesizes their results into a final recommendation using an LLM.
+    Returns the final summary and the individual agent results for transparency.
+    """
+    # Construct input data matching the agent state's 'input' key
+    input_data = {"token_id": req.token_id, "token_name": req.token_name or "Unknown Token"}
+
+    try:
+        # Use a unique thread_id for the manager session
+        config = {"configurable": {"thread_id": f"manager_{str(uuid4())}"}}
+        logger.info(f"Invoking analysis_manager graph with input: {input_data}")
+
+        # Invoke the manager graph asynchronously
+        # The graph itself expects the input nested under the "input" key
+        final_state = await manager_agent_app.ainvoke({"input": input_data}, config=config)
+        logger.info(f"Analysis Manager graph final state received.")
+        # logger.debug(f"Final state details: {final_state}") # For detailed debugging
+
+        # Extract results from the final state
+        final_summary = final_state.get("final_summary")
+        sma_result = final_state.get("sma_result")
+        bounce_result = final_state.get("bounce_result")
+        oracle_result = final_state.get("oracle_result")
+        sub_errors = final_state.get("error_messages", [])
+
+        overall_error = None
+        # Report errors if any sub-agents failed or synthesis failed
+        if sub_errors:
+            error_summary = f"One or more sub-analyses encountered errors: {'; '.join(sub_errors)}"
+            overall_error = error_summary
+            logger.warning(f"Manager analysis finished with errors: {error_summary}")
+        # Check if the final summary itself indicates a synthesis failure
+        if final_summary and (final_summary.startswith("Error during final synthesis:") or final_summary.startswith("Analysis halted")):
+             overall_error = final_summary # Prioritize synthesis/halt error message
+
+        # Return the structured response
+        return ManagerResponse(
+            final_summary=final_summary,
+            sma_analysis=sma_result,      # Include individual result
+            bounce_analysis=bounce_result,  # Include individual result
+            oracle_analysis=oracle_result,  # Include individual result
+            error=overall_error          # Populate error field if relevant
+        )
+
+    except Exception as e:
+        logger.exception("Unhandled error processing analysis_manager request")
+        # Return a server error response
+        return ManagerResponse(
+            error=f"An unexpected server error occurred during manager execution: {type(e).__name__} - {str(e)}"
+        )
