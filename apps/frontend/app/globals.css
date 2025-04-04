@@ -124,6 +124,7 @@
 .landingLeft {
   background-size: 120% 120%;
   background-position: 0% 0%;
+  background-attachment: fixed;
   animation-name: cylceBgLeft;
   animation-duration: 10s;
   animation-timing-function: ease-in-out;
@@ -144,3 +145,49 @@
   color: #FFFFFF;
 }
 
+
+.feathers {
+  position: absolute;
+  right: 0px;
+  top: 0px;
+  width: 40px;
+  overflow: hidden;
+  height: 100vh;
+  display: block;
+}
+
+.feathers .feather {
+  position: absolute;
+  right: 0px;
+  top: 0px;
+  height: 100vh;
+  width: 0px;
+  display: block;
+  background: linear-gradient(180deg, rgba(255,255,255,.25) 0%, rgba(255,255,255,0) 100%); 
+  animation-name: feathers;
+  animation-duration: 10s;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+.feathers .feather-1 {
+  animation-duration: 7s;
+}
+
+.feathers .feather-2 {
+  animation-duration: 8.8s;
+}
+
+.feathers .feather-3 {
+  animation-duration: 11.2s;
+}
+
+
+
+@keyframes feathers {
+  0%    { width: 5px; }
+  33%   { width: 24px; }
+  55%   { width: 12px; }
+  90%   { width: 19px; }
+  100%  { width: 5px; }
+}

@@ -86,7 +86,7 @@ export default function App() {
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer">
               <Image
-                src="/icons/token_metrics.png"
+                src="/icons/tokenmetrics-symbol.svg"
                 alt="Token Metrics"
                 width={28}
                 height={28}
@@ -102,7 +102,7 @@ export default function App() {
             </div>
             <div className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer">
               <Image
-                src="/icons/coinbase_wallet.png"
+                src="/icons/coinbase.svg"
                 alt="Coinbase Wallet"
                 width={28}
                 height={28}
