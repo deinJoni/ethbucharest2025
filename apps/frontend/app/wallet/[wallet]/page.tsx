@@ -146,9 +146,7 @@ const WalletPage = () => {
                   </span>
                 </div>
 
-                <div className="border-t border-gray-200	"></div>
-
-                <p className="text-gray-600 text-center">{agent.description}</p>
+                <p className="text-gray-600 text-center">{agent.shortdesc}</p>
                 <Link href={`/wallet/${address}/agent/${agent.id}`}>
                   <button className="mt-4 px-4 py-2 bg-sky-800 text-white rounded-md hover:bg-blue-700 transition-colors">
                     View Details

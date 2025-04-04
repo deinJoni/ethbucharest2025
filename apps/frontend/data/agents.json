@@ -3,6 +3,7 @@
     {
       "id": "sma-sensei",
       "name": "SMA Sensei",
+      "shortdesc": "Disciplined agent waiting for clean MA signals—prefers clarity over chaos, like a true technician.",
       "description": "Disciplined, patient agent that waits for clean signals from moving averages—like a traditional technical analyst who values clarity over chaos.",
       "riskScore": 3,
       "riskLevel": "Low to Moderate",
@@ -59,6 +60,7 @@
     {
       "id": "bounce-hunter",
       "name": "Bounce Hunter",
+      "shortdesc": "Patient sniper waits at key levels—strikes only on high-probability moves tied to price memory.",
       "description": "Patient sniper, not in a hurry. Waits quietly for price to approach historically important levels, and only then prepares to strike. Focuses on high-probability bounce or breakout zones based on human psychology of previous price memory.",
       "riskScore": 2,
       "riskLevel": "Low",
@@ -117,6 +119,7 @@
     {
       "id": "momentum-maverick",
       "name": "Momentum Maverick",
+      "shortdesc": "Momentum Maverick scans TG & TGC, reacting fast to guide you through crypto's chaos with precision.",
       "description": "Momentum Maverick is your fast-reacting crypto ally, scanning the market's pulse with laser focus. It reads the Trader Grade (TG) and latest momentum (TGC), cross-checking with averages to guide you confidently through volatile markets.",
       "riskScore": 7,
       "riskLevel": "Moderately High",
@@ -131,7 +134,8 @@
     },
     {
       "id": "quant-sprinter",
-      "name": "Quant Sprinter 🚀",
+      "name": "Quant Sprinter",
+      "shortdesc": "Quant Sprinter spots bursts fast—blends momentum with quant strength for sharp, data-driven trades.",
       "description": "Quant Sprinter is your quick-reflex crypto scout, combining fast momentum shifts with quant-grade fundamentals. It scans the market for sudden bursts of price action and validates them with solid underlying strength before making its call. Designed for agile traders who like sharp, data-driven decisions.",
       "riskScore": 8,
       "riskLevel": "High",

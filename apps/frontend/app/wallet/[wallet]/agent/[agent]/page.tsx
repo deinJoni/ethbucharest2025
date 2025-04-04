@@ -183,7 +183,7 @@ const SignalResult = ({ analysisData }: { analysisData: AnalysisResult }) => {
       case "HOLD":
         return "bg-yellow-100 text-yellow-800 border-yellow-300";
       default:
-        return "bg-blue-100 text-blue-800 border-blue-300";
+        return "bg-gray-100 text-gray-800 border-gray-300";
     }
   };
 
@@ -406,7 +406,7 @@ const AgentDetailPage = () => {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
+    <div className="w-full h-full container px-4 py-8">
       <Link
         href={`/wallet/${params.wallet}`}
         className="inline-flex items-center mb-6 text-blue-600 hover:text-blue-800"
@@ -437,7 +437,7 @@ const AgentDetailPage = () => {
           </div>
           <div className="mt-4 p-4 border border-gray-200 rounded-lg w-full">
             <div className="flex justify-between items-center mb-2">
-              <span className="text-gray-700 font-medium">Risk Level:</span>
+              <span className="text-gray-700 font-bold">Risk Level:</span>
               <span
                 className={`px-2 py-1 rounded text-xs ${
                   agent.riskLevel === "Low"
