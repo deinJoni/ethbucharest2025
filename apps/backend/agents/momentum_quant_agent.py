@@ -26,23 +26,29 @@ MOMENTUM_THRESHOLD = 0.005 # 0.5% change threshold
 QUANT_GRADE_THRESHOLD = 55 # Minimum quant grade for BUY signal
 
 # --- Momentum Quant Tool (Returns Dict) ---
-def momentum_quant_analysis(token_id: str) -> Dict[str, Any]:
+def momentum_quant_analysis(token_id: str, token_name: str = None) -> Dict[str, Any]:
     """
     Analyzes momentum (Trader Grade % change) and quantitative factors (Quant Grade)
     for a crypto token based on Token Metrics data. Requires the token ID.
+    Optional token_name parameter for consistency with other agents.
     Returns a dictionary containing calculated metrics, the signal (BUY/SELL/HOLD),
-    reasoning components, a reason string, and an error field.
+    reason string, and error field.
     """
-    logger.info(f"Starting momentum/quant analysis for token_id: {token_id}")
-    # Initialize result dictionary
+    # Clean the symbol if provided, use as token_name in result
+    token_name_clean = token_name.strip() if token_name else f"Token ID {token_id}"
+    logger.info(f"Starting momentum/quant analysis for {token_name_clean} (ID: {token_id})")
+    
+    # Initialize result dictionary with token_name included
     analysis_result: Dict[str, Any] = {
         "token_id": token_id,
+        "token_name": token_name_clean, # Add token_name directly
         "latest_tg": None,
         "previous_tg": None,
         "pct_change_tg": None,
         "quant_grade": None,
         "signal": "HOLD", # Default signal
         "reason_string": "Analysis did not complete.", # Default reason
+        "reasoning_components": {}, # Add reasoning_components to match bounce_hunter
         "error": None
     }
 
@@ -52,12 +58,14 @@ def momentum_quant_analysis(token_id: str) -> Dict[str, Any]:
          logger.error("Token Metrics API key not configured.")
          analysis_result["error"] = "API key missing"
          analysis_result["reason_string"] = "Internal configuration error: API key missing."
+         analysis_result["reasoning_components"]["error"] = "Internal configuration error: API key missing."
          return analysis_result
 
     if not token_id:
         logger.error("Missing token_id for momentum/quant analysis")
         analysis_result["error"] = "Missing token_id input"
         analysis_result["reason_string"] = "Input error: Token ID was not provided."
+        analysis_result["reasoning_components"]["error"] = "Input error: Token ID was not provided."
         return analysis_result
 
     headers = {
@@ -172,30 +180,45 @@ def momentum_quant_analysis(token_id: str) -> Dict[str, Any]:
          if analysis_result["quant_grade"] is None: reason_str += " Missing Quant Grade."
          analysis_result["signal"] = "HOLD"
          analysis_result["reason_string"] = reason_str
+         analysis_result["reasoning_components"]["error"] = reason_str # Add to reasoning_components
          analysis_result["error"] = "Insufficient data" # Flag error for LLM skip if needed
          return analysis_result
 
+    # Populate reasoning_components
+    reasoning_comps = {
+        "latest_tg": analysis_result["latest_tg"],
+        "previous_tg": analysis_result["previous_tg"],
+        "pct_change_tg": pct_change,
+        "quant_grade": quant_grade,
+        "momentum_threshold": MOMENTUM_THRESHOLD,
+        "quant_grade_threshold": QUANT_GRADE_THRESHOLD
+    }
+    
     # BUY Signal: Positive momentum AND strong quant grade
     if pct_change > MOMENTUM_THRESHOLD and quant_grade > QUANT_GRADE_THRESHOLD:
         signal = "BUY"
         reason_str = f"BUY signal triggered: Momentum ({pct_change:.2%}) > {MOMENTUM_THRESHOLD:.1%} threshold AND Quant Grade ({quant_grade:.1f}) > {QUANT_GRADE_THRESHOLD} threshold."
+        reasoning_comps["buy_check"] = True
         logger.info(reason_str)
 
     # SELL Signal: Negative momentum (significant drop)
     elif pct_change < -MOMENTUM_THRESHOLD:
         signal = "SELL"
         reason_str = f"SELL signal triggered: Momentum ({pct_change:.2%}) < {-MOMENTUM_THRESHOLD:.1%} threshold."
+        reasoning_comps["sell_check"] = True
         logger.info(reason_str)
 
     # HOLD Signal: Default if neither BUY nor SELL conditions are met
     else:
         signal = "HOLD"
         reason_str = f"HOLD signal: Conditions not met. Momentum ({pct_change:.2%}) did not meet BUY/SELL thresholds OR Quant Grade ({quant_grade:.1f}) was not above BUY threshold ({QUANT_GRADE_THRESHOLD})."
+        reasoning_comps["hold_reason"] = "thresholds_not_met"
         logger.info(reason_str)
 
     analysis_result["signal"] = signal
     analysis_result["reason_string"] = reason_str
-    logger.info(f"Momentum Quant analysis complete for {token_id}: Signal={signal}")
+    analysis_result["reasoning_components"] = reasoning_comps
+    logger.info(f"Momentum Quant analysis complete for {token_name_clean}: Signal={signal}")
     return analysis_result
 
 # --- Tool & Executor ---
@@ -204,7 +227,7 @@ momentum_quant_tool = StructuredTool.from_function(
     name="momentum_quant_analyzer", # Renamed for consistency
     description=(
         "Analyzes momentum (Trader Grade % change) and quantitative factors (Quant Grade) for a token using its Token Metrics ID. "
-        "Requires 'token_id'. Returns a dictionary with metrics, signal (BUY/SELL/HOLD), reasoning, and optional error."
+        "Requires 'token_id'. Optional 'token_name' for display. Returns a dictionary with metrics, signal (BUY/SELL/HOLD), reasoning, and error status."
     ),
 )
 
@@ -220,11 +243,9 @@ llm = ChatOpenAI(
 momentum_reasoning_prompt = PromptTemplate.from_template(
     """You are a crypto analysis assistant explaining the result of the Momentum Quant strategy for {token_name} (ID: {token_id}).
 
-    The analysis relies on these key metrics derived from Token Metrics Trader Grades:
-    *   Latest Trader Grade (TG): {latest_tg_str}
-    *   Previous Trader Grade (TG): {previous_tg_str}
-    *   Momentum (TG % Change): {pct_change_tg_str} (Change between latest and previous TG)
-    *   Latest Quant Grade: {quant_grade_str} (Score indicating fundamental strength, derived from latest TG data)
+    The analysis uses these key metrics:
+    *   Momentum (Trader Grade % Change): {pct_change_tg_str}
+    *   Latest Quant Grade: {quant_grade_str}
 
     Strategy Rules Used:
     *   BUY: If Momentum > {momentum_threshold:.1%} AND Quant Grade > {quant_grade_threshold}.
@@ -239,7 +260,7 @@ momentum_reasoning_prompt = PromptTemplate.from_template(
 
     **Explanation:**
 
-    Elaborate on this result. Clearly explain *why* the signal is {signal} based on the specific reason calculated and the metric values provided (Momentum: {pct_change_tg_str}, Quant Grade: {quant_grade_str}). Mention the thresholds used. Refer to the token as {token_name} where appropriate. Maintain a professional and objective tone suitable for a financial analysis website. Stick to the facts from this analysis.
+    Please rephrase the calculated reason into a concise, user-friendly explanation for why the signal is {signal}. Stick strictly to the provided reason and metrics. Mention the thresholds involved ({momentum_threshold:.1%}, {quant_grade_threshold}). Maintain a professional and objective tone.
     """
 )
 
@@ -251,7 +272,8 @@ class MomentumQuantAgentState(TypedDict):
     analysis_data: Optional[Dict[str, Any]] # Result from momentum_quant_analysis tool
     reason_string: Optional[str] # Pre-LLM reason string from tool
     llm_reasoning: Optional[str] # Final explanation from LLM
-    intermediate_steps: list[tuple[AgentAction, Dict[str, Any]]]
+    # Update intermediate_steps annotation to match other agents
+    intermediate_steps: Annotated[list[tuple[AgentAction, Dict[str, Any]]], operator.add]
 
 # --- Nodes (Added generate_llm_reasoning_node) ---
 def prepare_tool_call_node(state: MomentumQuantAgentState):
@@ -275,8 +297,8 @@ def prepare_tool_call_node(state: MomentumQuantAgentState):
         }
 
     # Prepare tool input dictionary matching momentum_quant_analysis args
-    # Tool still only needs token_id
-    tool_input = {"token_id": token_id}
+    # Include token_name in the tool input
+    tool_input = {"token_id": token_id, "token_name": token_name}
 
     action = AgentAction(
         tool="momentum_quant_analyzer", # Use updated tool name
@@ -308,7 +330,8 @@ def execute_tool_node(state: MomentumQuantAgentState):
              "error": error_message,
              "reason_string": error_message,
              "token_id": state.get("input", {}).get("token_id"), # Try to get token_id
-             "token_name": token_name_for_error # Add name
+             "token_name": token_name_for_error, # Add name
+             "reasoning_components": {"error": error_message} # Add error to reasoning_components
          }
          # Log a dummy action/error pair
          dummy_action = AgentAction(tool="error_state", tool_input={}, log=error_message)
@@ -320,11 +343,8 @@ def execute_tool_node(state: MomentumQuantAgentState):
     else:
         logger.info(f"Executing tool: {action.tool} with input {action.tool_input} for {token_name_for_error}")
         try:
-            # Tool now returns a dictionary
+            # Tool function now handles token_name directly
             output_dict = tool_executor.invoke(action)
-            # Add token_name to the output dict for consistency downstream
-            if isinstance(output_dict, dict):
-                output_dict["token_name"] = token_name_for_error
             logger.info(f"Tool output dictionary for {token_name_for_error}: {output_dict}")
             analysis_result_data = output_dict
 
@@ -338,7 +358,8 @@ def execute_tool_node(state: MomentumQuantAgentState):
                  "error": error_message,
                  "reason_string": f"Internal error during tool execution: {str(e)}",
                  "token_id": action.tool_input.get("token_id"), # Try to preserve context
-                 "token_name": token_name_for_error
+                 "token_name": token_name_for_error,
+                 "reasoning_components": {"error": f"Internal error during tool execution: {str(e)}"} # Add error to reasoning_components
             }
 
     # Log the actual action and the dictionary result
@@ -356,40 +377,45 @@ def execute_tool_node(state: MomentumQuantAgentState):
 
 def generate_llm_reasoning_node(state: MomentumQuantAgentState):
     logger.info("--- Momentum Quant: Generating LLM Reasoning Node ---")
-    input_state = state['input'] # Get the input dict
     analysis_data = state.get("analysis_data")
     reason_string = state.get("reason_string") # Get pre-calculated reason
     final_explanation = "Error: Analysis data not found in state." # Default error
 
-    # Extract token_id and token_name from input state
-    token_id = input_state.get("token_id", "N/A")
-    # Use name from analysis_data if available (added in execute node), fallback to input state
-    token_name = (analysis_data or {}).get("token_name") or input_state.get("token_name") or f"Token ID {token_id}"
-
     if not analysis_data:
-        logger.error(f"No analysis data found in state for LLM reasoning for {token_name}.")
-        # Include token name in error message if possible
-        return {"llm_reasoning": f"Analysis Error for {token_name} (ID: {token_id}): Analysis data not found."}
+        logger.error("No analysis data found in state for LLM reasoning.")
+        return {"llm_reasoning": final_explanation}
+
+    # Extract token data directly from analysis_data
+    token_id = analysis_data.get("token_id", "N/A")
+    token_name = analysis_data.get("token_name", f"Token ID {token_id}")
 
     # If tool execution resulted in an error stored in analysis_data
     if analysis_data.get("error"):
         error_msg = analysis_data["error"]
-        reasoning_error = reason_string or f"Unknown calculation error ({error_msg})"
-        logger.warning(f"Skipping LLM reasoning for {token_name} due to previous error: {error_msg}")
+        # Use the reason_string which should contain the error details now
+        reasoning_error = reason_string or analysis_data.get("reason_string", "Unknown calculation error")
+        # Also check reasoning_components for error message
+        if reasoning_error == "Unknown calculation error" and isinstance(analysis_data.get("reasoning_components"), dict):
+            reasoning_error = analysis_data["reasoning_components"].get("error", reasoning_error)
+        logger.warning(f"Skipping LLM reasoning due to previous error: {error_msg}")
         final_explanation = f"Analysis Error for {token_name} (ID: {token_id}): {reasoning_error}"
         return {"llm_reasoning": final_explanation}
 
     # --- Prepare data for prompt ---
     signal = analysis_data.get("signal", "UNKNOWN")
-    latest_tg = analysis_data.get("latest_tg")
-    previous_tg = analysis_data.get("previous_tg")
-    pct_change_tg = analysis_data.get("pct_change_tg")
-    quant_grade = analysis_data.get("quant_grade")
+    reasoning_comps = analysis_data.get("reasoning_components", {})
+    
+    # Get values from reasoning_components if available, otherwise from analysis_data
+    latest_tg = reasoning_comps.get("latest_tg") or analysis_data.get("latest_tg")
+    previous_tg = reasoning_comps.get("previous_tg") or analysis_data.get("previous_tg")
+    pct_change_tg = reasoning_comps.get("pct_change_tg") or analysis_data.get("pct_change_tg")
+    quant_grade = reasoning_comps.get("quant_grade") or analysis_data.get("quant_grade")
 
     # Check required values exist
     if pct_change_tg is None or quant_grade is None or reason_string is None:
          logger.error(f"LLM Node: Missing required data (pct_change, quant_grade, or reason_string) in state for {token_name}: {state}")
-         final_explanation = f"Analysis Error for {token_name} (ID: {token_id}): Could not generate explanation due to missing core metrics or reason."
+         # Use the existing reason_string if available, otherwise a generic message
+         final_explanation = f"Analysis Error for {token_name} (ID: {token_id}): {reason_string or 'Could not generate explanation due to missing core metrics or reason.'}"
          return {"llm_reasoning": final_explanation}
 
     # Format values for prompt
@@ -433,16 +459,17 @@ def generate_llm_reasoning_node(state: MomentumQuantAgentState):
 # --- Build Graph (Updated) ---
 workflow = StateGraph(MomentumQuantAgentState)
 
+# Use standardized node names
 workflow.add_node("prepare_tool_call", prepare_tool_call_node)
 workflow.add_node("execute_tool", execute_tool_node)
-workflow.add_node("generate_llm_reasoning", generate_llm_reasoning_node) # Added
+workflow.add_node("generate_llm_reasoning", generate_llm_reasoning_node)
 
 workflow.set_entry_point("prepare_tool_call")
 
+# Add edges to define the flow
 workflow.add_edge("prepare_tool_call", "execute_tool")
-# workflow.add_edge("execute_tool", END) # Removed old edge
-workflow.add_edge("execute_tool", "generate_llm_reasoning") # Added edge
-workflow.add_edge("generate_llm_reasoning", END) # Added edge
+workflow.add_edge("execute_tool", "generate_llm_reasoning")
+workflow.add_edge("generate_llm_reasoning", END)
 
 # --- Memory & Compile ---
 memory = MemorySaver()
@@ -479,11 +506,14 @@ if __name__ == "__main__":
             print("--- Agent Execution Result State ---")
             # print(result_state) # Print full state for debugging if needed
             print(f"Input: {result_state.get('input')}")
-            print(f"Analysis Data: {result_state.get('analysis_data')}")
-            print(f"LLM Reasoning: {result_state.get('llm_reasoning')}")
+            # Verify the structure of the output
+            analysis_data_output = result_state.get('analysis_data')
+            llm_reasoning_output = result_state.get('llm_reasoning')
+            print(f"Analysis Data (Dict): {analysis_data_output}")
+            print(f"LLM Reasoning (Str): {llm_reasoning_output}")
 
             # Extract the final LLM explanation
-            final_output = result_state.get("llm_reasoning", "No LLM reasoning found in state.")
+            final_output = llm_reasoning_output or "No LLM reasoning found in state."
             print(f"\n--- Final LLM Explanation for {case['description']} (ID: {token_id_to_test}) ---")
             print(final_output)
 

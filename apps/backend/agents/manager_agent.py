@@ -81,7 +81,7 @@ async def invoke_sub_agent(agent_app, input_data: Dict[str, Any], agent_name: st
         if agent_name == "sma_agent":
             result = final_state.get("llm_reasoning")
         elif agent_name == "bounce_hunter_agent":
-            result = final_state.get("analysis_result")
+            result = final_state.get("llm_reasoning")
         elif agent_name == "crypto_oracle_agent":
             result = final_state.get("llm_reasoning")
         else:

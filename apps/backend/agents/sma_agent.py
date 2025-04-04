@@ -1,5 +1,5 @@
 import logging
-from typing import TypedDict, Annotated, Dict, Any
+from typing import TypedDict, Annotated, Dict, Any, Optional
 import operator
 from datetime import datetime, timedelta
 import statistics
@@ -31,7 +31,13 @@ def sma_analysis(token_id: str, token_name: str) -> Dict[str, Any]:
     logger.info(f"--- sma_analysis Tool ---")
     logger.info(f"Received token_id: {token_id}, token_name: {token_name}")
 
-    analysis_data = {"token_id": token_id, "token_name": token_name, "error": None} # Initialize result dict
+    analysis_data = {
+        "token_id": token_id, 
+        "token_name": token_name, 
+        "error": None,
+        "reasoning_components": {},  # Add reasoning_components field to match other agents
+        "reason_string": None  # Add reason_string field for consistency
+    } # Initialize result dict
 
     try:
         # Fetch data
@@ -49,68 +55,120 @@ def sma_analysis(token_id: str, token_name: str) -> Dict[str, Any]:
         data = response.json()
 
         if not data.get("success", False) or not data.get("data"):
-            analysis_data["error"] = f"No data found for token_id {token_id}."
+            error_msg = f"No data found for token_id {token_id}."
+            analysis_data["error"] = error_msg
+            analysis_data["reason_string"] = error_msg
+            analysis_data["reasoning_components"]["error"] = error_msg
             return analysis_data
 
         # Sort data
         try:
             daily_data = sorted(data["data"], key=lambda x: x["DATE"], reverse=False)
         except KeyError:
-             analysis_data["error"] = f"Data format error for token_id {token_id}: Missing 'DATE' key."
+             error_msg = f"Data format error for token_id {token_id}: Missing 'DATE' key."
+             analysis_data["error"] = error_msg
+             analysis_data["reason_string"] = error_msg
+             analysis_data["reasoning_components"]["error"] = error_msg
              return analysis_data
         except Exception as e:
              logger.exception(f"Error sorting data for token_id {token_id}: {e}")
-             analysis_data["error"] = f"Failed to process data for token_id {token_id}: Error during sorting."
+             error_msg = f"Failed to process data for token_id {token_id}: Error during sorting."
+             analysis_data["error"] = error_msg
+             analysis_data["reason_string"] = error_msg
+             analysis_data["reasoning_components"]["error"] = error_msg
              return analysis_data
 
         # Check data length and extract closes
         if len(daily_data) < 50:
-            analysis_data["error"] = f"Insufficient data for token_id {token_id}. Needed 50 days, got {len(daily_data)}."
+            error_msg = f"Insufficient data for token_id {token_id}. Needed 50 days, got {len(daily_data)}."
+            analysis_data["error"] = error_msg
+            analysis_data["reason_string"] = error_msg
+            analysis_data["reasoning_components"]["error"] = error_msg
             return analysis_data
         relevant_data = daily_data[-50:]
         try:
             closes = [day["CLOSE"] for day in relevant_data]
         except KeyError:
-            analysis_data["error"] = f"Data format error for token_id {token_id}: Missing 'CLOSE' key."
+            error_msg = f"Data format error for token_id {token_id}: Missing 'CLOSE' key."
+            analysis_data["error"] = error_msg
+            analysis_data["reason_string"] = error_msg
+            analysis_data["reasoning_components"]["error"] = error_msg
             return analysis_data
         if len(closes) < 50: # Failsafe
-             analysis_data["error"] = f"Data processing error for token_id {token_id}: Could not extract 50 closing prices."
+             error_msg = f"Data processing error for token_id {token_id}: Could not extract 50 closing prices."
+             analysis_data["error"] = error_msg
+             analysis_data["reason_string"] = error_msg
+             analysis_data["reasoning_components"]["error"] = error_msg
              return analysis_data
 
         # Calculate metrics
-        analysis_data["current_price"] = closes[-1]
+        current_price = closes[-1]
+        analysis_data["current_price"] = current_price
         if len(closes) < 20: # Failsafe
-           analysis_data["error"] = f"Not enough data points ({len(closes)}) to calculate 20-day SMA for token_id {token_id}."
+           error_msg = f"Not enough data points ({len(closes)}) to calculate 20-day SMA for token_id {token_id}."
+           analysis_data["error"] = error_msg
+           analysis_data["reason_string"] = error_msg
+           analysis_data["reasoning_components"]["error"] = error_msg
            return analysis_data
-        analysis_data["sma20"] = statistics.mean(closes[-20:])
-        analysis_data["sma50"] = statistics.mean(closes[-50:])
+        sma20 = statistics.mean(closes[-20:])
+        sma50 = statistics.mean(closes[-50:])
+        analysis_data["sma20"] = sma20
+        analysis_data["sma50"] = sma50
+
+        # Store all values in reasoning_components too
+        reasoning_comps = {
+            "current_price": current_price,
+            "sma20": sma20,
+            "sma50": sma50
+        }
 
         # Determine signal and basic comparison
         price = analysis_data["current_price"]
-        sma20 = analysis_data["sma20"]
-        sma50 = analysis_data["sma50"]
         if price > sma20 and price > sma50:
-            analysis_data["signal"] = "BUY"
-            analysis_data["comparison"] = f"Current price (${price:.2f}) > SMA20 (${sma20:.2f}) and > SMA50 (${sma50:.2f})"
+            signal = "BUY"
+            comparison = f"Current price (${price:.2f}) > SMA20 (${sma20:.2f}) and > SMA50 (${sma50:.2f})"
+            reasoning_comps["buy_check"] = True
+            reasoning_comps["above_sma20"] = True
+            reasoning_comps["above_sma50"] = True
         elif price < sma20 and price < sma50:
-            analysis_data["signal"] = "SELL"
-            analysis_data["comparison"] = f"Current price (${price:.2f}) < SMA20 (${sma20:.2f}) and < SMA50 (${sma50:.2f})"
+            signal = "SELL"
+            comparison = f"Current price (${price:.2f}) < SMA20 (${sma20:.2f}) and < SMA50 (${sma50:.2f})"
+            reasoning_comps["sell_check"] = True
+            reasoning_comps["below_sma20"] = True
+            reasoning_comps["below_sma50"] = True
         else:
-            analysis_data["signal"] = "NO_SIGNAL"
-            analysis_data["comparison"] = f"Current price (${price:.2f}) is not consistently above or below both SMAs (SMA20=${sma20:.2f}, SMA50=${sma50:.2f})"
+            signal = "NO_SIGNAL"
+            comparison = f"Current price (${price:.2f}) is not consistently above or below both SMAs (SMA20=${sma20:.2f}, SMA50=${sma50:.2f})"
+            reasoning_comps["hold_reason"] = "mixed_signals"
+            reasoning_comps["above_sma20"] = price > sma20
+            reasoning_comps["above_sma50"] = price > sma50
+            
+        analysis_data["signal"] = signal
+        analysis_data["comparison"] = comparison
+        analysis_data["reason_string"] = comparison
+        analysis_data["reasoning_components"] = reasoning_comps
 
         logger.info(f"Calculated analysis data for {token_id}: {analysis_data}")
         return analysis_data
 
     except requests.exceptions.RequestException as e:
-         analysis_data["error"] = f"API request failed for token_id {token_id}: {str(e)}"
+         error_msg = f"API request failed for token_id {token_id}: {str(e)}"
+         analysis_data["error"] = error_msg
+         analysis_data["reason_string"] = error_msg
+         analysis_data["reasoning_components"]["error"] = error_msg
          return analysis_data
     except statistics.StatisticsError as e:
-         analysis_data["error"] = f"Calculation error for token_id {token_id}: {str(e)}"
+         error_msg = f"Calculation error for token_id {token_id}: {str(e)}"
+         analysis_data["error"] = error_msg
+         analysis_data["reason_string"] = error_msg
+         analysis_data["reasoning_components"]["error"] = error_msg
          return analysis_data
     except Exception as e:
         logger.exception(f"Unexpected error analyzing token_id {token_id}: {str(e)}")
-        analysis_data["error"] = f"Failed to analyze token_id {token_id}: An unexpected error occurred ({type(e).__name__})."
+        error_msg = f"Failed to analyze token_id {token_id}: An unexpected error occurred ({type(e).__name__})."
+        analysis_data["error"] = error_msg
+        analysis_data["reason_string"] = error_msg
+        analysis_data["reasoning_components"]["error"] = error_msg
         return analysis_data
 
 # --- Tool & Executor ---
@@ -150,107 +208,189 @@ Do not add any information not present in the input data. Be factual and stick t
 Explanation:"""
 )
 
-# --- LangGraph State ---
+# --- LangGraph State (Updated for consistency) ---
 class AgentState(TypedDict):
     input: Dict[str, str] # Expects {"token_id": "...", "token_name": "..."}
-    action: AgentAction | None
-    analysis_data: Dict[str, Any] | None
-    llm_reasoning: str | None
+    action: Optional[AgentAction]
+    analysis_data: Optional[Dict[str, Any]] # Result from sma_analysis tool
+    reason_string: Optional[str] # Pre-LLM reason string from tool
+    llm_reasoning: Optional[str] # Final explanation from LLM
     intermediate_steps: Annotated[list[tuple[AgentAction, Dict[str, Any]]], operator.add]
 
-# --- Nodes ---
-def prepare_tool_call_node(state: AgentState):
-    logger.info("--- Preparing Tool Call Node ---")
+# --- Nodes (Renamed for consistency) ---
+def prepare_tool_call(state: AgentState):
+    logger.info("--- SMA Agent: Preparing Tool Call Node ---")
     input_data = state['input']
     token_id = input_data.get('token_id')
     token_name = input_data.get('token_name', 'Unknown Token') # Default name if missing
     logger.info(f"Input token_id: {token_id}, token_name: {token_name}")
 
     if not token_id:
-        logger.error("Missing 'token_id' in input for prepare_tool_call_node")
-        # How to handle this? Maybe raise error or return a state indicating failure?
-        # For now, let's allow it to proceed but the tool call will likely fail.
-        tool_input = {"token_id": None, "token_name": token_name} # Or handle error state
-    else:
-        tool_input = {"token_id": token_id, "token_name": token_name}
+        logger.error("Missing 'token_id' in input for prepare_tool_call node")
+        # Return error state that skips tool execution
+        return {
+            "analysis_data": { # Store error info here
+                 "token_id": token_id, 
+                 "token_name": token_name, 
+                 "error": "Missing 'token_id' in input.",
+                 "reason_string": "Input error: Token ID was not provided.",
+                 "reasoning_components": {"error": "Input error: Token ID was not provided."}
+            }
+        }
 
-    action = AgentAction(tool="sma_analysis_calculator", tool_input=tool_input, log=f"Preparing SMA calculation for {token_name} ({token_id})")
+    tool_input = {"token_id": token_id, "token_name": token_name}
+    action = AgentAction(tool="sma_analysis_calculator", tool_input=tool_input, log=f"Preparing SMA calculation for {token_name} (ID: {token_id})")
     logger.info(f"Prepared action: {action}")
-    return {"action": action}
+    # Initialize intermediate_steps for consistency
+    return {"action": action, "intermediate_steps": []}
 
-def execute_tool_node(state: AgentState):
-    logger.info("--- Executing Calculation Tool Node ---")
+def execute_tool(state: AgentState):
+    logger.info("--- SMA Agent: Executing Tool Node ---")
     action = state.get("action")
-    logger.info(f"Action to execute: {action}")
     analysis_result_data = None
-    error_message = None
+    token_name_for_error = state.get("input", {}).get("token_name", "Unknown Token")
+
+    # Check if prepare_node already put an error in analysis_data
+    if state.get("analysis_data") and state["analysis_data"].get("error"):
+         logger.warning(f"Skipping tool execution due to error in prepare step: {state['analysis_data']['error']}")
+         return {} # No changes needed, error already in analysis_data
 
     if not isinstance(action, AgentAction):
          logger.error(f"execute_tool_node received non-action: {action}")
-         error_message = f"Error: execute_tool_node received non-action: {action}"
-         analysis_result_data = {"error": error_message}
-         return {"analysis_data": analysis_result_data, "intermediate_steps": [(action, analysis_result_data)]}
+         error_message = f"Internal error: Tool execution step received invalid action state."
+         analysis_result_data = {
+             "error": error_message,
+             "reason_string": error_message,
+             "token_id": state.get("input", {}).get("token_id"),
+             "token_name": token_name_for_error,
+             "reasoning_components": {"error": error_message} # Add error to reasoning_components
+         }
+         # Log a dummy action/error pair
+         dummy_action = AgentAction(tool="error_state", tool_input={}, log=error_message)
+         return {
+             "analysis_data": analysis_result_data, 
+             "reason_string": error_message,
+             "intermediate_steps": [(dummy_action, analysis_result_data)]
+         }
 
     try:
         output_dict = tool_executor.invoke(action)
-        logger.info(f"Calculation tool raw output: {output_dict}")
+        logger.info(f"Tool output dictionary: {output_dict}")
         analysis_result_data = output_dict
 
         if isinstance(output_dict, dict) and output_dict.get("error"):
             logger.warning(f"SMA calculation tool reported an error: {output_dict['error']}")
 
     except Exception as e:
-        logger.error(f"Error executing tool {action.tool}: {e}", exc_info=True)
-        error_message = f"Error during tool execution {action.tool}: {str(e)}"
-        analysis_result_data = {"error": error_message}
+        logger.exception(f"Error executing tool {action.tool}")
+        error_message = f"Tool execution failed: {type(e).__name__}"
+        analysis_result_data = {
+             "error": error_message,
+             "reason_string": f"Internal error during tool execution: {str(e)}",
+             "token_id": action.tool_input.get("token_id"),
+             "token_name": action.tool_input.get("token_name"),
+             "reasoning_components": {"error": f"Internal error during tool execution: {str(e)}"} # Add error to reasoning_components
+        }
 
-    return {"analysis_data": analysis_result_data, "intermediate_steps": [(action, analysis_result_data)]}
+    # Extract reason_string (for SMA, use comparison field as reason_string)
+    reason_string = None
+    if isinstance(analysis_result_data, dict):
+        reason_string = analysis_result_data.get("reason_string") or analysis_result_data.get("comparison")
+        # Also store the reason_string in the analysis_data for consistency if not already there
+        if reason_string and "reason_string" not in analysis_result_data:
+            analysis_result_data["reason_string"] = reason_string
 
-def generate_llm_reasoning_node(state: AgentState):
-    logger.info("--- Generating LLM Reasoning Node ---")
+    # Create intermediate_steps with the actual action/result
+    intermediate_steps = [(action, analysis_result_data)]
+
+    return {
+        "analysis_data": analysis_result_data,
+        "reason_string": reason_string,
+        "intermediate_steps": intermediate_steps
+    }
+
+def generate_llm_reasoning(state: AgentState):
+    logger.info("--- SMA Agent: Generating LLM Reasoning Node ---")
     analysis_data = state.get("analysis_data")
+    reason_string = state.get("reason_string") # Get pre-calculated reason
 
     if not analysis_data:
         logger.error("No analysis data found in state for LLM reasoning.")
         return {"llm_reasoning": "Error: Analysis data was missing."}
 
+    # Extract token information
+    token_id = analysis_data.get("token_id", "N/A")
+    token_name = analysis_data.get("token_name", f"Token ID {token_id}")
+
+    # If tool execution resulted in an error stored in analysis_data
     if analysis_data.get("error"):
         error_msg = analysis_data["error"]
+        # Use the reason_string which should contain the error details now
+        reasoning_error = reason_string or analysis_data.get("reason_string", "Unknown calculation error")
+        # Also check reasoning_components for error message
+        if reasoning_error == "Unknown calculation error" and isinstance(analysis_data.get("reasoning_components"), dict):
+            reasoning_error = analysis_data["reasoning_components"].get("error", reasoning_error)
         logger.warning(f"Skipping LLM reasoning due to previous error: {error_msg}")
-        return {"llm_reasoning": f"Failed to generate analysis: {error_msg}"}
+        final_explanation = f"Analysis Error for {token_name} (ID: {token_id}): {reasoning_error}"
+        return {"llm_reasoning": final_explanation}
 
-    required_keys = ["token_name", "current_price", "sma20", "sma50", "signal", "comparison"]
-    if not all(key in analysis_data for key in required_keys):
-        logger.error(f"Analysis data missing required keys for LLM prompt: {analysis_data}")
-        missing_keys = [key for key in required_keys if key not in analysis_data]
-        return {"llm_reasoning": f"Error: Analysis data incomplete, missing keys: {missing_keys}"}
+    # Get data from reasoning_components if available
+    reasoning_comps = analysis_data.get("reasoning_components", {})
+    
+    # Get values from reasoning_components if available, otherwise from analysis_data directly
+    current_price = reasoning_comps.get("current_price") or analysis_data.get("current_price")
+    sma20 = reasoning_comps.get("sma20") or analysis_data.get("sma20")
+    sma50 = reasoning_comps.get("sma50") or analysis_data.get("sma50")
+    signal = analysis_data.get("signal", "UNKNOWN")
+    comparison = analysis_data.get("comparison") or reason_string
+
+    # Check for required keys
+    if current_price is None or sma20 is None or sma50 is None or signal is None or comparison is None:
+        logger.error(f"Analysis data missing required values for LLM prompt: {analysis_data}")
+        missing_values = []
+        if current_price is None: missing_values.append("current_price")
+        if sma20 is None: missing_values.append("sma20")
+        if sma50 is None: missing_values.append("sma50")
+        if signal is None: missing_values.append("signal")
+        if comparison is None: missing_values.append("comparison")
+        return {"llm_reasoning": f"Error: Analysis data incomplete, missing values: {missing_values}"}
+
+    # Prepare prompt input
+    prompt_input = {
+        "token_name": token_name,
+        "current_price": current_price,
+        "sma20": sma20,
+        "sma50": sma50,
+        "signal": signal,
+        "comparison": comparison
+    }
 
     try:
         reasoning_chain = reasoning_prompt | llm
-        logger.info(f"Invoking LLM with data: {analysis_data}")
-        llm_response = reasoning_chain.invoke(analysis_data)
+        logger.info(f"Invoking LLM with data for {token_name}: {prompt_input}")
+        llm_response = reasoning_chain.invoke(prompt_input)
 
         if hasattr(llm_response, 'content'):
              reasoning_text = llm_response.content
         else:
              reasoning_text = str(llm_response)
 
-        logger.info(f"LLM generated reasoning: {reasoning_text}")
+        logger.info(f"LLM generated reasoning for {token_name}: {reasoning_text}")
         return {"llm_reasoning": reasoning_text.strip()}
 
     except Exception as e:
-        logger.exception("Error invoking LLM for reasoning")
-        return {"llm_reasoning": f"Error generating explanation: {str(e)}"}
+        logger.exception(f"Error invoking LLM for reasoning for {token_name}")
+        return {"llm_reasoning": f"Error generating explanation for {token_name} (ID: {token_id}): {str(e)}"}
 
 # --- Build Graph ---
 workflow = StateGraph(AgentState)
-workflow.add_node("prepare_tool_call_node", prepare_tool_call_node)
-workflow.add_node("execute_tool_node", execute_tool_node)
-workflow.add_node("generate_llm_reasoning_node", generate_llm_reasoning_node)
-workflow.set_entry_point("prepare_tool_call_node")
-workflow.add_edge("prepare_tool_call_node", "execute_tool_node")
-workflow.add_edge("execute_tool_node", "generate_llm_reasoning_node")
-workflow.add_edge("generate_llm_reasoning_node", END)
+workflow.add_node("prepare_tool_call", prepare_tool_call)
+workflow.add_node("execute_tool", execute_tool)
+workflow.add_node("generate_llm_reasoning", generate_llm_reasoning)
+workflow.set_entry_point("prepare_tool_call")
+workflow.add_edge("prepare_tool_call", "execute_tool")
+workflow.add_edge("execute_tool", "generate_llm_reasoning")
+workflow.add_edge("generate_llm_reasoning", END)
 
 # --- Memory & Compile ---
 memory = MemorySaver()

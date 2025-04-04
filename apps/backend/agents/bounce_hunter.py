@@ -1,18 +1,16 @@
 import logging
-from typing import TypedDict, Annotated, Dict, Any
+from typing import TypedDict, Annotated, Dict, Any, Optional
 import operator
 from datetime import datetime
-from uuid import uuid4
 import requests
 
-from langchain_openai import ChatOpenAI # Keep for potential future use? Or remove? Let's remove for now.
-# from langchain.agents import Tool, create_react_agent # Remove ReAct
-from langchain.tools import StructuredTool # Use StructuredTool
+from langchain_openai import ChatOpenAI
+from langchain.tools import StructuredTool
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolExecutor
 from langgraph.checkpoint.memory import MemorySaver
-# from langchain.prompts import PromptTemplate # Remove ReAct Prompt
-from langchain_core.agents import AgentAction # Keep for state/nodes
+from langchain_core.agents import AgentAction
+from langchain.prompts import PromptTemplate
 from core.config import settings
 
 # Logging
@@ -20,314 +18,475 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-# --- Configuration ---
-PROXIMITY_THRESHOLD = 0.05 # 5%
+# --- Configuration (Updated based on PRD) ---
+TRADER_GRADE_BUY_THRESHOLD = 50
+TRADER_GRADE_CHANGE_BUY_THRESHOLD = 0.05 # 5% represented as 0.05
+TRADER_GRADE_SELL_THRESHOLD = 30
+TRADER_GRADE_CHANGE_SELL_THRESHOLD = -0.10 # -10% represented as -0.10
+AVERAGE_TG_DAYS = 5 # Number of days to average TG over
 
-# --- Bounce Hunter Tool ---
-# Modified to accept token_id and symbol directly
-def bounce_hunter_analysis(token_id: str, symbol: str) -> str:
+# --- Crypto Oracle Tool (Returns Dict) ---
+def crypto_oracle_analysis(token_id: str, token_symbol: str) -> Dict[str, Any]:
     """
-    Analyzes if a crypto token's current price is near historical support or resistance levels.
-    Requires the token ID (e.g., 3306) and symbol (e.g., 'ETH').
-    Fetches current price and historical levels from Token Metrics API using the token_id.
-    Uses the symbol for the API call parameter and filtering results.
-    Compares price to levels within a configurable threshold (5%).
-    Flags 'Bounce Watch' if price is above a nearby level (support).
-    Flags 'Breakout Watch' if price is below a nearby level (resistance).
+    Analyzes a crypto token based on Token Metrics Trader Grade (TG), 24h % change (TGC),
+    and 5-day average TG. Requires token ID and symbol.
+    Returns a dictionary containing calculated metrics, the signal, and reasoning components, or an error.
     """
+    symbol_cleaned = token_symbol.strip().upper()
+    logger.info(f"Starting crypto oracle analysis for symbol: '{symbol_cleaned}' (ID: {token_id})")
+    # Initialize result dictionary
+    analysis_result: Dict[str, Any] = {
+        "token_id": token_id,
+        "token_symbol": symbol_cleaned,
+        "latest_tg": None,
+        "tgc_24h": None,
+        "avg_tg_5d": None,
+        "signal": "HOLD", # Default signal
+        "reasoning_components": {},
+        "reason_string": "Analysis did not complete.", # Add field for pre-LLM reason
+        "error": None
+    }
+
+    api_key = settings.TOKEN_METRICS_API_KEY
+    if not api_key or api_key == "YOUR_TOKEN_METRICS_API_KEY":
+        logger.error("Token Metrics API key not configured.")
+        analysis_result["error"] = "API key missing"
+        analysis_result["reasoning_components"]["error"] = "Internal configuration error: API key missing."
+        return analysis_result
+
+    headers = {"accept": "application/json", "api_key": api_key}
+
+    if not token_id:
+        logger.error(f"Missing token_id for analysis of symbol '{symbol_cleaned}'")
+        analysis_result["error"] = "Missing token_id input"
+        analysis_result["reasoning_components"]["error"] = "Input error: Token ID was not provided."
+        return analysis_result
+
+    # --- Fetch Trader Grade (TG) and 24h Change (TGC) ---
+    trader_grade = None
+    trader_grade_change = None
+    avg_trader_grade = None
+
     try:
-        # Clean the input symbol (used for API param and filtering)
-        symbol_cleaned = symbol.strip().upper()
-        logger.info(f"Starting bounce hunter analysis for symbol: '{symbol_cleaned}' (using token_id: {token_id})")
+        grade_url = f"https://api.tokenmetrics.com/v2/trader-grades/?token_id={token_id}&limit={AVERAGE_TG_DAYS}"
+        logger.info(f"Fetching Trader Grades from: {grade_url}")
 
-        # --- Fetch API Key ---
-        api_key = settings.TOKEN_METRICS_API_KEY
-        if not api_key or api_key == "YOUR_TOKEN_METRICS_API_KEY": # Basic check
-             logger.error("Token Metrics API key not configured.")
-             return f"Failed to analyze {symbol_cleaned}: Token Metrics API key missing."
+        response = requests.get(grade_url, headers=headers, timeout=15) # Increased timeout slightly
+        response.raise_for_status()
+        trader_grade_response = response.json()
 
-        headers = {
-            "accept": "application/json",
-            "api_key": api_key
-        }
+        if trader_grade_response.get("success") and trader_grade_response.get("data"):
+            raw_data = trader_grade_response["data"]
+            if raw_data:
+                try:
+                    sorted_data = sorted(raw_data, key=lambda x: datetime.fromisoformat(x['DATE'].replace('Z', '+00:00')), reverse=True)
+                except (KeyError, ValueError, TypeError) as sort_e:
+                    logger.error(f"Error sorting TG data by DATE for {symbol_cleaned} (ID: {token_id}): {sort_e}.")
+                    analysis_result["error"] = "Cannot sort API data"
+                    analysis_result["reasoning_components"]["error"] = "Data processing error: Could not sort trader grade history by date."
+                    return analysis_result
 
-        # --- Fetch Current Price from Token Metrics API ---
-        current_price = None
-        price_url = f"https://api.tokenmetrics.com/v2/price?token_id={token_id}"
-        try:
-            logger.info(f"Fetching current price for {symbol_cleaned} (ID: {token_id}) from {price_url}")
-            price_response = requests.get(price_url, headers=headers, timeout=10)
-            price_response.raise_for_status()
-            price_data = price_response.json()
+                if not sorted_data:
+                    logger.error(f"TG data became empty after sorting for {symbol_cleaned} (ID: {token_id})")
+                    analysis_result["error"] = "No valid data after sorting"
+                    analysis_result["reasoning_components"]["error"] = "Data processing error: No valid trader grade history found after sorting."
+                    return analysis_result
 
-            if price_data.get("success") and price_data.get("data"):
-                if price_data["data"]:
-                    # Assuming the first item in the data list corresponds to the token_id
-                    token_price_info = price_data["data"][0]
-                    if token_price_info.get("TOKEN_ID") == int(token_id): # Verify token ID match
-                        current_price = token_price_info.get("CURRENT_PRICE")
-                        if current_price is not None:
-                            current_price = float(current_price) # Ensure it's a float
-                            logger.info(f"Successfully fetched current price for {symbol_cleaned} (ID: {token_id}): {current_price}")
+                # Calculate Average TG first (needs multiple points)
+                if len(sorted_data) >= AVERAGE_TG_DAYS:
+                    try:
+                        recent_grades = [float(d["TM_TRADER_GRADE"]) for d in sorted_data[:AVERAGE_TG_DAYS] if d.get("TM_TRADER_GRADE") is not None]
+                        if len(recent_grades) == AVERAGE_TG_DAYS:
+                            avg_trader_grade = sum(recent_grades) / AVERAGE_TG_DAYS
+                            analysis_result["avg_tg_5d"] = avg_trader_grade # Store in result
+                            logger.info(f"Calculated {AVERAGE_TG_DAYS}-day Avg TG for {symbol_cleaned}: {avg_trader_grade:.2f}")
                         else:
-                            logger.error(f"CURRENT_PRICE field missing in Token Metrics price response for {symbol_cleaned} (ID: {token_id}).")
-                    else:
-                        logger.error(f"Token ID mismatch in price response. Expected {token_id}, got {token_price_info.get('TOKEN_ID')}")
+                             logger.warning(f"Could not extract {AVERAGE_TG_DAYS} valid TGs for averaging for {symbol_cleaned}. Count: {len(recent_grades)}")
+                    except (ValueError, TypeError, KeyError) as avg_e:
+                        logger.error(f"Error calculating average TG for {symbol_cleaned}: {avg_e}")
+
+                # Extract Latest TG and TGC from the newest record
+                latest_data = sorted_data[0]
+                tg_value = latest_data.get("TM_TRADER_GRADE")
+                tgc_value = latest_data.get("TM_TRADER_GRADE_24H_PCT_CHANGE")
+
+                if tg_value is not None:
+                    try:
+                        trader_grade = float(tg_value)
+                        analysis_result["latest_tg"] = trader_grade # Store in result
+                        logger.info(f"Extracted latest TG for {symbol_cleaned}: {trader_grade}")
+                    except (ValueError, TypeError) as conv_e:
+                         logger.error(f"Error converting TG '{tg_value}' to float for {symbol_cleaned}: {conv_e}")
                 else:
-                     logger.error(f"Token Metrics price response data list is empty for {symbol_cleaned} (ID: {token_id}).")
-            else:
-                logger.error(f"Token Metrics price API call failed or returned no data for {symbol_cleaned} (ID: {token_id}). Message: {price_data.get('message')}")
+                    logger.error(f"TM_TRADER_GRADE key missing in latest data for {symbol_cleaned}")
 
-        except requests.exceptions.RequestException as e:
-            logger.exception(f"Error fetching current price from Token Metrics for {symbol_cleaned} (ID: {token_id}): {e}")
-            # Decide how to handle price fetch failure: return error or continue without price? Returning error is safer.
-            return f"Failed to analyze {symbol_cleaned}: Could not fetch current price from Token Metrics ({type(e).__name__})."
-        except (ValueError, KeyError, TypeError) as e: # Handle JSON parsing, key errors, or type conversion issues
-             logger.exception(f"Error processing Token Metrics price response for {symbol_cleaned} (ID: {token_id}): {e}")
-             return f"Failed to analyze {symbol_cleaned}: Invalid price data format received from Token Metrics ({type(e).__name__})."
-
-        # Check if current_price was successfully obtained before proceeding
-        if current_price is None:
-            # If price fetch failed for any reason noted above, return an error message.
-            return f"Failed to analyze {symbol_cleaned}: Could not determine current price from Token Metrics."
-
-        # --- Fetch Historical Levels from Token Metrics API ---
-        # Use the provided token_id directly, no mapping needed
-        # Use cleaned symbol for the 'symbol' parameter in the URL (though maybe not needed if endpoint ignores it?)
-        levels_url = f"https://api.tokenmetrics.com/v2/resistance-support?token_id={token_id}&limit=100&page=0"
-        # headers are already defined above
-
-        historical_levels = []
-        try:
-            logger.info(f"Fetching historical levels for {symbol_cleaned} (ID: {token_id}) from {levels_url}")
-            levels_response = requests.get(levels_url, headers=headers, timeout=10) # Added timeout
-            # print(f"Response: {levels_response}") # Debug print
-            levels_response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
-            levels_response_data = levels_response.json()
-            # print(f"Response Data: {levels_response_data}") # Debug print
-
-            if levels_response_data.get("success") and levels_response_data.get("data"):
-                # Since we query by token_id, the list should contain only our token.
-                # Take the first item directly instead of filtering by symbol.
-                if levels_response_data["data"]:
-                    token_data = levels_response_data["data"][0]
-                    # Optional: Verify the symbol if needed, though filtering is removed.
-                    # actual_symbol = token_data.get("TOKEN_SYMBOL")
-                    # if actual_symbol != symbol_cleaned:
-                    #    logger.warning(f"Symbol mismatch: Input gave '{symbol_cleaned}', API returned '{actual_symbol}'")
-
-                    raw_levels = token_data.get("HISTORICAL_RESISTANCE_SUPPORT_LEVELS", [])
-                    historical_levels = [{"level": float(lvl["level"]), "date": lvl["date"]} for lvl in raw_levels if "level" in lvl and "date" in lvl]
-                    logger.info(f"Successfully fetched {len(historical_levels)} levels for {symbol_cleaned} (ID: {token_id}) from Token Metrics.")
+                if tgc_value is not None:
+                    try:
+                        trader_grade_change = float(tgc_value)
+                        analysis_result["tgc_24h"] = trader_grade_change # Store in result
+                        logger.info(f"Extracted latest TGC for {symbol_cleaned}: {trader_grade_change:.4f}")
+                    except (ValueError, TypeError) as conv_e:
+                        logger.error(f"Error converting TGC '{tgc_value}' to float for {symbol_cleaned}: {conv_e}")
                 else:
-                    # This case means success=True, data is present, but the list is empty - unlikely
-                    logger.warning(f"Token Metrics response indicated success but data list was empty for {symbol_cleaned} (ID: {token_id}).")
-                    token_data = None # Ensure token_data is None
+                    logger.error(f"TM_TRADER_GRADE_24H_PCT_CHANGE key missing in latest data for {symbol_cleaned}")
+
+            else: # raw_data is empty list
+                logger.error(f"Trader Grade data list empty for {symbol_cleaned} (ID: {token_id})")
+                analysis_result["error"] = "No data found"
+                analysis_result["reasoning_components"]["error"] = "No trader grade data found for this token."
+                return analysis_result
+        else: # API call success=False or data key missing
+             api_msg = trader_grade_response.get('message', 'Unknown API error')
+             logger.error(f"Failed to fetch TG data for {symbol_cleaned} (ID: {token_id}). Message: {api_msg}")
+             analysis_result["error"] = f"API Error: {api_msg}"
+             analysis_result["reasoning_components"]["error"] = f"API Error: Could not fetch trader grade data ({api_msg})."
+             return analysis_result
+
+    except requests.exceptions.RequestException as req_e:
+         logger.exception(f"API Request error fetching TG for {symbol_cleaned} (ID: {token_id}): {req_e}")
+         analysis_result["error"] = "API request failed"
+         analysis_result["reasoning_components"]["error"] = f"Network error: Failed to connect to the trader grade API ({type(req_e).__name__})."
+         return analysis_result
+    except Exception as e: # Catch broader processing errors
+        logger.exception(f"Unexpected error processing TG data for {symbol_cleaned} (ID: {token_id}): {e}")
+        analysis_result["error"] = "Data processing failed"
+        analysis_result["reasoning_components"]["error"] = f"Internal error: Failed processing trader grade data ({type(e).__name__})."
+        return analysis_result
+
+    # --- Decision Logic ---
+    # Check if primary data was successfully extracted
+    if trader_grade is None or trader_grade_change is None:
+        logger.warning(f"Cannot make decision for {symbol_cleaned}: Missing latest TG or TGC after processing.")
+        analysis_result["error"] = "Missing primary data"
+        missing = []
+        if trader_grade is None: missing.append("Latest TG")
+        if trader_grade_change is None: missing.append("TGC")
+        reason_str = f"Data processing error: Could not determine required values ({', '.join(missing)})."
+        analysis_result["reasoning_components"]["error"] = reason_str
+        analysis_result["reason_string"] = reason_str # Store error reason
+        # Signal remains default HOLD
+        return analysis_result
+
+    # Apply the logic - Determine signal, reasoning components, and reason string
+    signal = "HOLD" # Start with HOLD
+    reason_str = "" # Initialize reason string
+    reasoning_comps = {
+        "latest_tg": trader_grade,
+        "tgc_24h": trader_grade_change,
+        "avg_tg_5d": avg_trader_grade, # Could be None
+        "tg_buy_threshold": TRADER_GRADE_BUY_THRESHOLD,
+        "tgc_buy_threshold": TRADER_GRADE_CHANGE_BUY_THRESHOLD,
+        "tg_sell_threshold": TRADER_GRADE_SELL_THRESHOLD,
+        "tgc_sell_threshold": TRADER_GRADE_CHANGE_SELL_THRESHOLD,
+    }
+
+    # BUY Check
+    buy_condition_met = False
+    avg_tg_check_passed = None # Track avg tg check specifically
+    if trader_grade > TRADER_GRADE_BUY_THRESHOLD and trader_grade_change > TRADER_GRADE_CHANGE_BUY_THRESHOLD:
+        reasoning_comps["buy_check_1"] = True
+        if avg_trader_grade is not None:
+            if trader_grade > avg_trader_grade:
+                buy_condition_met = True
+                avg_tg_check_passed = True
+                reasoning_comps["buy_check_2"] = True
+                reason_str = f"Latest TG ({trader_grade:.1f}) > {TRADER_GRADE_BUY_THRESHOLD}, Latest TG > Avg TG ({avg_trader_grade:.1f}), AND TGC ({trader_grade_change:.2%}) > {TRADER_GRADE_CHANGE_BUY_THRESHOLD:.0%}."
             else:
-                logger.error(f"Token Metrics API call failed or returned no data for {symbol_cleaned} (ID: {token_id}). Message: {levels_response_data.get('message')}")
-                return f"Failed to fetch data for {symbol_cleaned} from Token Metrics: {levels_response_data.get('message', 'Unknown API error')}"
+                avg_tg_check_passed = False
+                reasoning_comps["buy_check_2"] = False
+                # Reason for potential HOLD will be set later
+        else:
+            buy_condition_met = True # Allow BUY without avg check
+            avg_tg_check_passed = "skipped_avg_unavailable"
+            reasoning_comps["buy_check_2"] = "skipped_avg_unavailable"
+            reason_str = f"Latest TG ({trader_grade:.1f}) > {TRADER_GRADE_BUY_THRESHOLD} AND TGC ({trader_grade_change:.2%}) > {TRADER_GRADE_CHANGE_BUY_THRESHOLD:.0%} (Avg TG unavailable)."
+    else:
+        reasoning_comps["buy_check_1"] = False
 
-        except requests.exceptions.RequestException as e:
-            logger.exception(f"Error fetching data from Token Metrics for {symbol_cleaned} (ID: {token_id}): {e}")
-            return f"Failed to analyze {symbol_cleaned}: Could not connect to Token Metrics API ({type(e).__name__})."
-        except (ValueError, KeyError) as e: # Handle JSON parsing or key errors
-             logger.exception(f"Error processing Token Metrics response for {symbol_cleaned} (ID: {token_id}): {e}")
-             return f"Failed to analyze {symbol_cleaned}: Invalid data format received from Token Metrics ({type(e).__name__})."
-        # --- End API Fetch ---
+    if buy_condition_met:
+        signal = "BUY"
+    else:
+        # SELL Check
+        sell_condition_met = False
+        sell_reasons = []
+        sell_reason_parts = []
+        if trader_grade < TRADER_GRADE_SELL_THRESHOLD:
+            sell_condition_met = True
+            sell_reasons.append("tg_low")
+            sell_reason_parts.append(f"Latest TG ({trader_grade:.1f}) < {TRADER_GRADE_SELL_THRESHOLD}")
+        if trader_grade_change < TRADER_GRADE_CHANGE_SELL_THRESHOLD:
+            sell_condition_met = True
+            sell_reasons.append("tgc_low")
+            sell_reason_parts.append(f"TGC ({trader_grade_change:.2%}) < {TRADER_GRADE_CHANGE_SELL_THRESHOLD:.0%}")
 
-        # Check if historical_levels were successfully populated (token_data was found and valid)
-        if not historical_levels:
-            logger.warning(f"Could not extract historical levels for {symbol_cleaned} (ID: {token_id}) from Token Metrics response.")
-            # Return HOLD if no levels are found
-            return f"Decision: HOLD — Reason: No historical support/resistance levels found or extracted for {symbol_cleaned} (ID: {token_id}) via Token Metrics."
+        if sell_condition_met:
+            signal = "SELL"
+            reasoning_comps["sell_triggers"] = sell_reasons
+            reason_str = " OR ".join(sell_reason_parts)
+        else:
+            # HOLD Reason
+            signal = "HOLD"
+            if reasoning_comps.get("buy_check_1") == True and avg_tg_check_passed == False:
+                # Specifically failed the Avg TG check for BUY
+                reason_str = f"BUY conditions nearly met, but Latest TG ({trader_grade:.1f}) was not > Avg TG ({avg_trader_grade:.1f}). SELL conditions not met."
+            else:
+                # General HOLD - failed initial BUY check and SELL checks
+                 reason_str = f"Conditions for BUY or SELL were not met based on current TG ({trader_grade:.1f}), TGC ({trader_grade_change:.2%}), and Avg TG ({avg_trader_grade:.1f if avg_trader_grade is not None else 'N/A'})."
 
-        # --- Decision Logic ---
-        decision = "HOLD" # Default decision
-        reason = f"Price (${current_price:.2f}) is not within {PROXIMITY_THRESHOLD:.1%} of any known historical support/resistance levels."
+    analysis_result["signal"] = signal
+    analysis_result["reasoning_components"] = reasoning_comps
+    analysis_result["reason_string"] = reason_str # Store final calculated reason string
+    logger.info(f"Crypto Oracle analysis complete for {symbol_cleaned} (ID: {token_id}): Signal={signal}")
+    return analysis_result
 
-        # Sort levels by proximity to potentially prioritize the closest?
-        # Or just take the first signal found? Let's take the first signal for now.
-        for level_data in historical_levels:
-            level = level_data["level"]
-            level_date = level_data["date"]
-            price_diff = abs(current_price - level)
-            proximity_percent = (price_diff / level) if level != 0 else float('inf') # Avoid division by zero
 
-            if proximity_percent <= PROXIMITY_THRESHOLD:
-                distance_str = f"${price_diff:.2f} ({proximity_percent:.2%})"
-                if current_price > level:
-                    # Price is above a nearby level (Support) -> BUY signal
-                    decision = "BUY"
-                    reason = f"Price (${current_price:.2f}) is within {proximity_percent:.2%} above support level {level:.2f} (from {level_date}). Expecting a bounce."
-                    logger.info(f"BUY signal triggered for {symbol_cleaned} near support level {level:.2f}")
-                    break # Stop after finding the first significant level signal
-                else: # current_price <= level
-                    # Price is below a nearby level (Resistance) -> SELL signal
-                    decision = "SELL"
-                    reason = f"Price (${current_price:.2f}) is within {proximity_percent:.2%} below resistance level {level:.2f} (from {level_date}). Expecting rejection."
-                    logger.info(f"SELL signal triggered for {symbol_cleaned} near resistance level {level:.2f}")
-                    break # Stop after finding the first significant level signal
+# --- Tool & Executor ---
+crypto_oracle_tool = StructuredTool.from_function(
+    func=crypto_oracle_analysis,
+    name="crypto_oracle_analyzer",
+    description="Analyzes a token using its ID and symbol based on Token Metrics Trader Grade (TG), 24h change (TGC), and 5d Avg TG. Returns a dictionary with metrics, signal (BUY/SELL/HOLD), and reasoning components or an error.",
+)
+tool_executor = ToolExecutor([crypto_oracle_tool])
 
-        # Format the final output
-        result = f"Decision: {decision} — Reason: {reason}"
-
-        logger.info(f"Bounce hunter analysis result for {symbol_cleaned} (ID: {token_id}): {result}")
-        return result
-
-    except Exception as e:
-        # Log original symbol in case cleaning caused issues upstream
-        logger.exception(f"Error during bounce hunter analysis for symbol '{symbol}' (token_id: {token_id}): {str(e)}")
-        # Use cleaned symbol in user-facing error
-        return f"Failed to analyze {symbol.strip().upper()} for bounce/breakout: An unexpected error occurred ({type(e).__name__})."
-
-# --- Tool & LLM ---
-# Use StructuredTool as function takes multiple args
-bounce_hunter_tool = StructuredTool.from_function(
-    func=bounce_hunter_analysis,
-    name="bounce_hunter_analysis",
-    description=(
-        "Analyzes if a token's current price is near historical support or resistance levels (within 5% proximity) "
-        "using its Token Metrics ID (token_id) and symbol. Flags potential bounces or breakouts. "
-        "Returns a string analysis."
-    ),
-    # args_schema=... # Optional: Define Pydantic model for args if needed for validation
+# --- LLM and Prompt ---
+llm = ChatOpenAI(
+    temperature=0.1,
+    api_key=settings.OPENAI_API_KEY,
+    model="gpt-4-0125-preview"
 )
 
-tool_executor = ToolExecutor([bounce_hunter_tool])
+reasoning_prompt = PromptTemplate.from_template(
+    """You are a crypto analysis assistant explaining the result of the Crypto Oracle strategy for {token_symbol}.
 
-# Remove LLM used for ReAct agent decisions
-# llm = ChatOpenAI(...)
+    The analysis relies on these key metrics:
+    *   Latest Trader Grade (TG): {latest_tg_str} (A score from 0-100 indicating recent trading conditions, higher is generally more favorable)
+    *   24h TG Change (TGC): {tgc_24h_str} (The percentage change in the Trader Grade over the last 24 hours, indicating momentum)
+    *   5-Day Average TG: {avg_tg_5d_str} (The average Trader Grade over the last 5 days, indicating the recent trend)
 
-# Remove ReAct Prompt
-# prompt = PromptTemplate.from_template(...)
+    Strategy Rules Used:
+    *   BUY: If Latest TG > {tg_buy_threshold} AND Latest TG > 5d Avg TG (if available) AND TGC > {tgc_buy_threshold:.0%}.
+    *   SELL: If Latest TG < {tg_sell_threshold} OR TGC < {tgc_sell_threshold:.0%}.
+    *   HOLD: Otherwise.
 
-# Remove ReAct runnable
-# agent_runnable = create_react_agent(...)
+    **Analysis Summary:**
 
-# --- LangGraph State ---
-# Modified state to match sma_agent structure (input dict, explicit action, result)
+    Based on the Crypto Oracle strategy analysis for {token_symbol}, the resulting signal is **{signal}**.
+
+    The primary reason derived from the calculation is: "{reason_string}"
+
+    **Explanation:**
+
+    Elaborate on this result. Clearly explain *why* the signal is {signal} based on the specific reason calculated and the metric values provided ({latest_tg_str}, {tgc_24h_str}, {avg_tg_5d_str}). Maintain a professional and objective tone suitable for a financial analysis website. Stick to the facts from this analysis.
+    """
+)
+
+# --- LangGraph State (Updated) ---
 class AgentState(TypedDict):
     input: Dict[str, str] # Expects {"token_id": "...", "token_name": "..."}
-    action: AgentAction | None # Action prepared for the tool
-    analysis_result: str | None # String result from the tool
-    # Remove ReAct specific state keys
-    # agent_decision: AgentAction | AgentFinish | None
-    intermediate_steps: Annotated[list[tuple[AgentAction, str]], operator.add] # Keep for logging/tracing if needed
+    action: AgentAction | None
+    analysis_data: Optional[Dict[str, Any]] # Result from crypto_oracle_analysis tool
+    reason_string: Optional[str] # Added: Pre-LLM reason string from tool
+    llm_reasoning: Optional[str] # Final explanation from LLM
+    # Keep intermediate steps for tracing
+    intermediate_steps: Annotated[list[tuple[AgentAction, Dict[str, Any]]], operator.add]
 
-# --- Nodes ---
-# New node to prepare tool call, similar to sma_agent
+
+# --- Nodes (Added generate_llm_reasoning_node) ---
 def prepare_tool_call_node(state: AgentState):
-    logger.info("--- Bounce Hunter: Preparing Tool Call Node ---")
+    logger.info("--- Crypto Oracle: Preparing Tool Call Node ---")
     input_data = state['input']
     token_id = input_data.get('token_id')
-    # Use token_name as the basis for the symbol, default if missing
-    # The bounce_hunter_analysis tool needs *a* symbol, even if just for the API param.
-    # Assuming token_name can be used as symbol (e.g., "Ethereum" or "ETH")
-    symbol = input_data.get('token_name', 'UnknownSymbol')
-    logger.info(f"Input token_id: {token_id}, derived symbol: {symbol}")
+    token_name = input_data.get('token_name', 'UnknownSymbol')
+    logger.info(f"Input token_id: {token_id}, token_name/symbol: {token_name}")
 
     if not token_id:
         logger.error("Missing 'token_id' in input for prepare_tool_call_node")
-        # Handle error state: Set result directly to prevent tool call
-        return {"analysis_result": "Error: Missing 'token_id' in input."}
+        # Return error state that skips tool execution
+        return {
+            "analysis_data": { # Store error info here now
+                 "token_id": token_id, "token_symbol": token_name, "error": "Missing 'token_id' in input.",
+                 "reasoning_components": {"error": "Input error: Token ID was not provided."}
+            }
+        }
 
-    # Prepare tool input dictionary matching bounce_hunter_analysis args
-    tool_input = {"token_id": token_id, "symbol": symbol}
-
+    tool_input = {"token_id": token_id, "token_symbol": token_name}
     action = AgentAction(
-        tool="bounce_hunter_analysis",
+        tool="crypto_oracle_analyzer",
         tool_input=tool_input,
-        log=f"Preparing bounce hunter analysis for {symbol} (ID: {token_id})"
+        log=f"Preparing Crypto Oracle analysis for {token_name} (ID: {token_id})"
     )
     logger.info(f"Prepared action: {action}")
-    # Initialize intermediate_steps if it doesn't exist
     return {"action": action, "intermediate_steps": []}
 
 
-# Modified execute_tool_node for structured tool and new state
 def execute_tool_node(state: AgentState):
-    logger.info("--- Bounce Hunter: Executing Tool Node ---")
+    logger.info("--- Crypto Oracle: Executing Tool Node ---")
     action = state.get("action")
-    analysis_result = None
-    error_occurred = False
+    analysis_result_data = None
+
+    # Check if prepare_node already put an error in analysis_data
+    if state.get("analysis_data") and state["analysis_data"].get("error"):
+         logger.warning(f"Skipping tool execution due to error in prepare step: {state['analysis_data']['error']}")
+         # Keep existing analysis_data with error, potentially update intermediate_steps? No action to log.
+         return {} # No changes needed
 
     if not isinstance(action, AgentAction):
-        logger.error(f"execute_tool_node received non-action: {action}")
-        analysis_result = f"Error: Tool execution step received invalid action state: {action}"
-        error_occurred = True
-        action = AgentAction(tool="error", tool_input={}, log=analysis_result) # Dummy action for logging
+         logger.error(f"execute_tool_node received non-action: {action}")
+         error_message = f"Internal error: Tool execution step received invalid action state."
+         analysis_result_data = {
+             "error": error_message,
+             "reasoning_components": {"error": error_message}
+             # Add token_id/symbol if available from input state?
+         }
+         # Log a dummy action/error pair
+         dummy_action = AgentAction(tool="error_state", tool_input={}, log=error_message)
+         return {"analysis_data": analysis_result_data, "intermediate_steps": [(dummy_action, analysis_result_data)]}
     else:
         logger.info(f"Executing tool: {action.tool} with input {action.tool_input}")
         try:
-            # Execute the tool and get the output string
-            output_str = tool_executor.invoke(action)
-            logger.info(f"Tool output string: {output_str}")
-            analysis_result = output_str
+            # Tool now returns a dictionary
+            output_dict = tool_executor.invoke(action)
+            logger.info(f"Tool output dictionary: {output_dict}")
+            analysis_result_data = output_dict
+
+            if isinstance(output_dict, dict) and output_dict.get("error"):
+                 logger.warning(f"Crypto Oracle tool reported an error: {output_dict['error']}")
+
         except Exception as e:
             logger.exception(f"Error executing tool {action.tool}: {e}")
-            analysis_result = f"Error executing tool {action.tool}: {str(e)}"
-            error_occurred = True
+            error_message = f"Tool execution failed: {type(e).__name__}"
+            analysis_result_data = {
+                 "error": error_message,
+                 "reasoning_components": {"error": f"Internal error during tool execution: {str(e)}"},
+                 "token_id": action.tool_input.get("token_id"), # Try to preserve context
+                 "token_symbol": action.tool_input.get("token_symbol")
+            }
 
-    # Store result and log the step
+    # Log the actual action and the dictionary result
     intermediate_steps = state.get("intermediate_steps", [])
-    intermediate_steps.append((action, analysis_result))
+    intermediate_steps.append((action, analysis_result_data))
 
-    return {"analysis_result": analysis_result, "intermediate_steps": intermediate_steps}
+    # Extract reason_string and store in state
+    reason_string = analysis_result_data.get("reason_string") if isinstance(analysis_result_data, dict) else None
+
+    return {
+        "analysis_data": analysis_result_data,
+        "reason_string": reason_string, # Populate reason_string in state
+        "intermediate_steps": intermediate_steps
+    }
 
 
-# Remove ReAct specific nodes
-# def run_agent_node(state: AgentState): ...
-# def should_continue_edge(state: AgentState): ...
+def generate_llm_reasoning_node(state: AgentState):
+    logger.info("--- Crypto Oracle: Generating LLM Reasoning Node ---")
+    analysis_data = state.get("analysis_data")
+    reason_string = state.get("reason_string") # Get pre-calculated reason
+    final_explanation = "Error: Analysis data not found in state." # Default error
 
-# --- Build Graph ---
+    if not analysis_data:
+        logger.error("No analysis data found in state for LLM reasoning.")
+        return {"llm_reasoning": final_explanation}
+
+    # If tool execution resulted in an error stored in analysis_data
+    if analysis_data.get("error"):
+        error_msg = analysis_data["error"]
+        # Use the reason_string which should contain the error details now
+        reasoning_error = reason_string or analysis_data.get("reasoning_components", {}).get("error", "Unknown calculation error")
+        logger.warning(f"Skipping LLM reasoning due to previous error: {error_msg}")
+        final_explanation = f"Analysis Error for {analysis_data.get('token_symbol', 'token')}: {reasoning_error}"
+        return {"llm_reasoning": final_explanation}
+
+    # --- Prepare data for prompt (using pre-calculated reason) ---
+    signal = analysis_data.get("signal", "UNKNOWN")
+    reasoning_comps = analysis_data.get("reasoning_components", {})
+    latest_tg = reasoning_comps.get("latest_tg")
+    tgc_24h = reasoning_comps.get("tgc_24h")
+    avg_tg_5d = reasoning_comps.get("avg_tg_5d")
+
+    # Check required values exist (especially for formatting)
+    if latest_tg is None or tgc_24h is None or reason_string is None:
+         logger.error(f"LLM Node: Missing required data (TG, TGC, or Reason String) in state: {state}")
+         final_explanation = f"Analysis Error: Could not generate explanation due to missing core metrics or reason."
+         return {"llm_reasoning": final_explanation}
+
+    # Format values for prompt
+    latest_tg_str = f"{latest_tg:.1f}" if latest_tg is not None else "N/A"
+    tgc_24h_str = f"{tgc_24h:.2%}" if tgc_24h is not None else "N/A"
+    avg_tg_5d_str = f"{avg_tg_5d:.1f}" if avg_tg_5d is not None else "N/A (unavailable)"
+
+    # Prepare final input for the prompt
+    prompt_input = {
+        "token_symbol": analysis_data.get("token_symbol", "this token"),
+        "latest_tg_str": latest_tg_str,
+        "tgc_24h_str": tgc_24h_str,
+        "avg_tg_5d_str": avg_tg_5d_str,
+        "signal": signal,
+        "reason_string": reason_string, # Pass pre-calculated reason
+        "tg_buy_threshold": TRADER_GRADE_BUY_THRESHOLD,
+        "tgc_buy_threshold": TRADER_GRADE_CHANGE_BUY_THRESHOLD,
+        "tg_sell_threshold": TRADER_GRADE_SELL_THRESHOLD,
+        "tgc_sell_threshold": TRADER_GRADE_CHANGE_SELL_THRESHOLD,
+    }
+
+    try:
+        reasoning_chain = reasoning_prompt | llm
+        logger.info(f"Invoking LLM with data: {prompt_input}")
+        llm_response = reasoning_chain.invoke(prompt_input)
+
+        if hasattr(llm_response, 'content'):
+             final_explanation = llm_response.content
+        else:
+             final_explanation = str(llm_response)
+
+        logger.info(f"LLM generated reasoning: {final_explanation}")
+        return {"llm_reasoning": final_explanation.strip()}
+
+    except Exception as e:
+        logger.exception("Error invoking LLM for reasoning")
+        final_explanation = f"Error generating explanation: {str(e)}"
+        return {"llm_reasoning": final_explanation}
+
+
+# --- Build Graph (Updated) ---
 workflow = StateGraph(AgentState)
-
-# Add the nodes to the graph
 workflow.add_node("prepare_tool_call_node", prepare_tool_call_node)
 workflow.add_node("execute_tool_node", execute_tool_node)
-
-# Set the entry point
+workflow.add_node("generate_llm_reasoning_node", generate_llm_reasoning_node) # Added
 workflow.set_entry_point("prepare_tool_call_node")
-
-# Define the linear graph flow
 workflow.add_edge("prepare_tool_call_node", "execute_tool_node")
-workflow.add_edge("execute_tool_node", END) # End after tool execution
+# workflow.add_edge("execute_tool_node", END) # Removed old edge
+workflow.add_edge("execute_tool_node", "generate_llm_reasoning_node") # Added edge
+workflow.add_edge("generate_llm_reasoning_node", END) # Added edge
 
 # --- Memory & Compile ---
 memory = MemorySaver()
 app = workflow.compile(checkpointer=memory)
 
-# --- Manual Test ---
-# Updated test block for new structure
+# --- Manual Test (Updated Check) ---
 if __name__ == "__main__":
-    print("--- Testing Bounce Hunter Agent (Structured Flow) ---")
+    from uuid import uuid4
+    print("--- Testing Crypto Oracle Agent (with LLM Reasoning) ---")
     config = {"configurable": {"thread_id": str(uuid4())}}
-    # Define the user input for the agent (dictionary)
-    token_id_to_test = "3306" # Example Token ID for ETH on Token Metrics
-    # Test with both 'Ethereum' and 'ETH' as potential token_name inputs
-    # token_name_to_test = "Ethereum"
-    token_name_to_test = "ETH"
-    test_input = {"token_id": token_id_to_test, "token_name": token_name_to_test}
+    test_token_id = "3306" # e.g., Ethereum
+    test_token_name = "ETH"
+    test_input = {"token_id": test_token_id, "token_name": test_token_name}
 
     print(f"Invoking agent with input: {test_input} and config: {config}")
 
     try:
-        # Execute the agent graph with the input dictionary
         result_state = app.invoke({"input": test_input}, config=config)
+        print("--- Agent Execution Result State ---")
+        # print(result_state) # Print full state if needed for debug
+        print(f"Input: {result_state.get('input')}")
+        print(f"Analysis Data: {result_state.get('analysis_data')}")
+        print(f"LLM Reasoning: {result_state.get('llm_reasoning')}")
 
-        print("\n--- Agent Execution Result State ---")
-        print(result_state)
-
-        # Extract the final analysis result from the state
-        final_output = result_state.get("analysis_result", "No analysis result found in state.")
-
-        print("\n--- Final Analysis Result ---")
+        # Check the final explanation
+        final_output = result_state.get("llm_reasoning", "No LLM reasoning found in state.")
+        print("--- Final LLM Explanation ---")
         print(final_output)
-
     except Exception as e:
-        # Catch any exceptions during the invocation
-        print(f"\n--- Error during agent execution ---")
+        print(f"--- Error during agent execution ---")
         logger.exception("Agent invocation failed in main block")
         print(f"Error: {e}")
 
-    print("\n--- Test Complete ---")
+    print("--- Test Complete ---") 
