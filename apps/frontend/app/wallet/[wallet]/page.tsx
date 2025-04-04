@@ -14,7 +14,7 @@ import { formatEther } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 import agentsData from "@/data/agents.json";
 import Link from "next/link";
-
+import TokenRedirectSelect from "@/components/TokensRedirectSelect";
 // Initialize Moralis outside component
 if (!Moralis.Core.isStarted) {
   Moralis.start({
@@ -35,22 +35,22 @@ const WalletPage = () => {
   useEffect(() => {
     const fetchTokenData = async () => {
       if (!address) return;
-  
+
       try {
         setIsLoading(true);
-  
+
         // Get ERC20 token balances for Sepolia
         const tokenBalances = await Moralis.EvmApi.token.getWalletTokenBalances({
           address,
           chain: "0xaa36a7", // Sepolia chain ID
         });
-  
+
         // Get native balance (ETH) for Sepolia
         const balance = await Moralis.EvmApi.balance.getNativeBalance({
           address,
           chain: "0xaa36a7", // Sepolia chain ID
         });
-  
+
         // Create native token object
         const nativeToken = {
           id: "0x0000000000000000000000000000000000000000", // Standard address for native ETH
@@ -60,10 +60,10 @@ const WalletPage = () => {
           value: balance.result.balance.toString(),
           address: "0x0000000000000000000000000000000000000000",
         };
-  
+
         // Set native balance separately (if you still need this for other components)
         setNativeBalance(nativeToken);
-        
+
         // Map ERC20 tokens
         const erc20Tokens = tokenBalances.result.map((token, index) => ({
           id: token.token?.contractAddress?.toString() || "",
@@ -73,10 +73,10 @@ const WalletPage = () => {
           value: token.value,
           address: token.token?.contractAddress?.toString() ?? "",
         }));
-  
+
         // Combine native token with ERC20 tokens
         setTokens([nativeToken, ...erc20Tokens]);
-  
+
       } catch (err) {
         console.error("Error fetching token data:", err);
         setError("Failed to load token data");
@@ -112,6 +112,12 @@ const WalletPage = () => {
           <TokensTable data={[...tokens]} />
         </div>
 
+        <div className="w-full">
+          <h1 className="text-2xl font-bold mb-4">Search for a token and get AI analysis</h1>
+          <TokenRedirectSelect />
+        </div>
+
+
         <div className="w-full mt-12">
           <h1 className="text-2xl font-bold mb-4">Trading Agents</h1>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -129,7 +135,7 @@ const WalletPage = () => {
                 </div>
                 <h3 className="text-xl font-semibold mb-2">{agent.name}</h3>
                 <p className="text-gray-700 font-light text-xs mb-0">
-                    Risk Level
+                  Risk Level
                 </p>
                 <div className="flex items-center mt-0 mb-3">
                   <span
