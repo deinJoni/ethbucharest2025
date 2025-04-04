@@ -4,12 +4,16 @@ import React from 'react'
 
 const layout = ({ children }: { children: React.ReactNode }) => {
     return (
-        <div className="w-full h-full grid grid-cols-12">
+        <div className="w-full h-screen flex justify-end">
+            {/* Fixed left column */}
             <div
-                className="col-span-3 w-full h-full relative landingLeft"
-                style={{ backgroundImage: `url('/landing-left-bg.jpg')` }}
+                className="w-1/4 fixed top-0 left-0 h-screen z-10"
+                style={{
+                    backgroundImage: `url('/landing-left-bg.jpg')`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center'
+                }}
             >
-
                 {/* Our logo in top left */}
                 <div className="absolute top-8 left-8 flex flex-col items-left">
                     <Image
@@ -32,11 +36,11 @@ const layout = ({ children }: { children: React.ReactNode }) => {
 
                 {/* Centered label with semi-transparent background */}
                 <div className="absolute inset-0 flex items-center justify-left left-8">
-                    <div className="max-w-lg text-lefts">
-                        <h1 className="text-5xl font-bold text-white mb-2">
+                    <div className="max-w-lg text-lefts px-10">
+                        <h1 className="text-3xl font-bold text-white mb-2">
                             Get a portfolio managers opinion about your assets.
                         </h1>
-                        <h2 className="text-3xl font-bold text-white mb-2">
+                        <h2 className="text-xl font-bold text-white mb-2">
                             Based on what multiple AI agents think and your preferences.
                         </h2>
                     </div>
@@ -56,9 +60,13 @@ const layout = ({ children }: { children: React.ReactNode }) => {
                     />
                 </div>
             </div>
-            <div className="col-span-9 px-10 py-4">
-                <Navbar />
-                {children}
+
+            {/* Scrollable content area with padding to account for fixed sidebar */}
+            <div className=" w-3/4 min-h-screen">
+                <div className="px-10 py-4 w-full">
+                    <Navbar />
+                    {children}
+                </div>
             </div>
         </div>
     )
