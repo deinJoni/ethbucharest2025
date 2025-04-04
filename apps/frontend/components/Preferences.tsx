@@ -216,7 +216,7 @@ const Preferences = ({ address }: { address: string }) => {
                         ${profile.id === 1
                           ? "ring-green-500"
                           : profile.id === 2
-                            ? "ring-amber-500"
+                            ? "ring-cyan-500"
                             : "ring-rose-500"
                         }
                       `}
@@ -228,7 +228,7 @@ const Preferences = ({ address }: { address: string }) => {
                             ? profile.id === 1
                               ? "bg-green-50"
                               : profile.id === 2
-                                ? "bg-amber-50"
+                                ? "bg-cyan-50"
                                 : "bg-rose-50"
                             : "bg-card hover:bg-muted/50"
                           }
@@ -256,7 +256,7 @@ const Preferences = ({ address }: { address: string }) => {
                                 ? profile.id === 1
                                   ? "text-green-700"
                                   : profile.id === 2
-                                    ? "text-amber-700"
+                                    ? "text-cyan-700"
                                     : "text-rose-700"
                                 : "text-foreground"
                               }
@@ -276,7 +276,7 @@ const Preferences = ({ address }: { address: string }) => {
                               ${profile.id === 1
                                 ? "bg-green-500"
                                 : profile.id === 2
-                                  ? "bg-amber-500"
+                                  ? "bg-cyan-500"
                                   : "bg-rose-500"
                               }
                             `}
