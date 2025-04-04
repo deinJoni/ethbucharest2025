@@ -9,7 +9,7 @@ const WalletStatistics = ({ balance }: { balance: number }) => {
             <div>
                 <WalletBalance balance={balance} className="" />
             </div>
-            <Chart className="flex-1" />
+            <Chart className="flex-1 relative -z-[1]" />
         </div>
     )
 }
