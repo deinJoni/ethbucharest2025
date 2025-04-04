@@ -1,40 +1,35 @@
 from langchain_community.tools import tool
 import logging
-import re
+# import re # No longer needed
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 @tool
-def multiply(query: str) -> int:
-    """Multiply two integers together.
-    
-    Args:
-        query: A string in the format 'a=5 b=3' where a and b are integers to multiply
-        
-    Returns:
-        The product of a and b
-    """
-    logger.info(f"Multiply tool called with: {query}")
-    
-    # Parse the input
+def multiply(query: str) -> str: # Return string for consistency, including errors
+    """Multiply two integers. Input must be two integers separated by a space (e.g., '5 3')."""
+    logger.info(f"Multiply tool called with: '{query}'")
+
     try:
-        # Extract a and b values using regex
-        a_match = re.search(r'a=(\d+)', query)
-        b_match = re.search(r'b=(\d+)', query)
-        
-        if not a_match or not b_match:
-            return "Error: Input must be in the format 'a=5 b=3'"
-            
-        a = int(a_match.group(1))
-        b = int(b_match.group(1))
-        
+        # Split the input string and convert to integers
+        parts = query.split()
+        if len(parts) != 2:
+            raise ValueError("Input must contain exactly two numbers separated by a space.")
+
+        a = int(parts[0])
+        b = int(parts[1])
+
         result = a * b
         logger.info(f"Multiply result: {result}")
-        return result
-    except Exception as e:
-        logger.error(f"Error in multiply tool: {e}")
-        return f"Error: {str(e)}"
+        return str(result) # Return result as a string
 
-tools = [multiply]
+    except ValueError as ve:
+        logger.error(f"Value error in multiply tool: {ve}")
+        return f"Error: {ve}"
+    except Exception as e:
+        logger.error(f"Unexpected error in multiply tool: {e}", exc_info=True)
+        return f"Error: An unexpected error occurred."
+
+# Removed the 'tools' list export as it's not typically used this way
+# If needed elsewhere, import the tool directly: from tools.exampletool import multiply
