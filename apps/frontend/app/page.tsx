@@ -19,9 +19,30 @@ export default function App() {
     <div className="h-screen grid md:grid-cols-2 min-h-full">
       {/* Left side with background image */}
       <div
-        className="bg-cover bg-center w-full h-full relative"
+        className="w-full h-full relative landingLeft"
         style={{ backgroundImage: `url('/landing-left-bg.jpg')` }}
       >
+
+        {/* Our logo in top left */}
+        <div className="absolute top-8 left-8 flex flex-col items-left">
+          <Image
+            src="/icons/lmk-logo.svg"
+            alt="Logo"
+            width={100}
+            height={75}
+            className="mt-1 mb-2 drop-shadow-lg"
+          />
+          <span className="text-lg leading-snug text-white font-medium drop-shadow-md claimText">
+            let me know <br />
+            when to&nbsp;
+              <span className="claimOptions relative">
+                <span className="claimOption option-buy">buy</span>
+                <span className="claimOption option-hold">hold</span>
+                <span className="claimOption option-sell">sell</span>
+              </span>
+          </span>
+        </div>
+
         {/* Centered label with semi-transparent background */}
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="bg-black/40 backdrop-blur-sm p-6 rounded-lg max-w-md text-center">
