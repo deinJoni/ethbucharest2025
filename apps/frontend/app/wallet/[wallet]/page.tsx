@@ -11,7 +11,7 @@ import { TokensTable } from "@/components/TokensTable";
 import { Token } from "@/types";
 import WalletStatistics from "@/components/WalletStatistics";
 import { formatEther } from "@/lib/utils";
-import { Loader2 } from "lucide-react"
+import { Loader2 } from "lucide-react";
 import agentsData from "@/data/agents.json";
 import Link from "next/link";
 
@@ -59,13 +59,15 @@ const WalletPage = () => {
           chain: "0xaa36a7", // Sepolia chain ID
         });
 
-        setTokens(tokenBalances.result.map((token, index) => ({
-          id: index.toString(),
-          symbol: token.token?.symbol ?? "",
-          name: token.token?.name ?? "",
-          amount: token.amount.toString(),
-          value: token.value,
-        })));
+        setTokens(
+          tokenBalances.result.map((token, index) => ({
+            id: index.toString(),
+            symbol: token.token?.symbol ?? "",
+            name: token.token?.name ?? "",
+            amount: token.amount.toString(),
+            value: token.value,
+          }))
+        );
 
         setNativeBalance({
           id: "native",
@@ -85,7 +87,13 @@ const WalletPage = () => {
     fetchTokenData();
   }, [address]);
 
-  if (isLoading || !address) return <div className="flex flex-col items-center justify-center h-screen"><Loader2 className="w-10 h-10 animate-spin" />Loading...</div>;
+  if (isLoading || !address)
+    return (
+      <div className="flex flex-col items-center justify-center h-screen">
+        <Loader2 className="w-10 h-10 animate-spin" />
+        Loading...
+      </div>
+    );
   if (error) return <div>Error: {error}</div>;
   console.log("tokens", tokens);
   return (
@@ -101,9 +109,7 @@ const WalletPage = () => {
 
         <div className="w-full mt-8">
           <h1 className="text-2xl font-bold mb-4">Your Tokens</h1>
-          <TokensTable data={[
-            ...tokens
-          ]} />
+          <TokensTable data={[...tokens]} />
         </div>
 
         <div className="w-full mt-12">
@@ -177,7 +183,7 @@ const WalletPage = () => {
           </div>
         </div>
 
-          {/* <div className="flex flex-col items-center justify-center mt-8">
+        {/* <div className="flex flex-col items-center justify-center mt-8">
           <h1 className="text-2xl font-bold">Original Tokens Display</h1>
           <div className="flex flex-col items-center justify-center">
             {nativeBalance && tokens.length === 0 && (
@@ -201,8 +207,6 @@ const WalletPage = () => {
         </div> */}
       </div>
     </div>
-        </div>
-      </>
   );
 };
 
