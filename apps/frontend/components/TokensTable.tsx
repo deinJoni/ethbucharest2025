@@ -173,7 +173,7 @@ export function TokensTable({ data }: { data: Token[] }) {
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
                   className="cursor-pointer hover:bg-muted/50"
-                  onClick={() => router.push(`/wallet/${address}/token/${row.original.id}`)}
+                  onClick={() => router.push(`/wallet/${address}/token/${row.original.address}`)}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
