@@ -16,4 +16,4 @@ const WalletStatistics = ({ balance }: { balance: number }) => {
 
 
 
-export default WalletStatistics
+export default WalletStatistics;
