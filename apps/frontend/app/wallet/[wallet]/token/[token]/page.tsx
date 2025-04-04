@@ -12,6 +12,7 @@ import { useAccount } from 'wagmi';
 import { Token } from '@/types';
 import Moralis from 'moralis';
 import { axiosInstance } from '@/axios';
+import tokensList from '@/data/tokens.json';
 
 // Initialize Moralis outside component
 if (!Moralis.Core.isStarted) {
@@ -24,10 +25,8 @@ const TokenPage = () => {
     // Get route params and query params
     let { wallet, token: tokenAddress } = useParams();
     const searchParams = useSearchParams();
-    const urlSymbol = searchParams.get('symbol');
-
-    console.log('Token Address:', tokenAddress);
-    console.log('URL Symbol:', urlSymbol);
+    const urlId = searchParams.get('id');
+    const urlName = searchParams.get('name');
 
     const [token, setToken] = useState<Token | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -47,56 +46,26 @@ const TokenPage = () => {
         
         try {
             setIsLoading(true);
+            console.log("tokenAddress:", tokenAddress);
 
             // Case 1: Using discover_token_address to lookup by symbol
-            if (tokenAddress === "discover_token_address" && urlSymbol) {
-                // Get all token balances for the wallet
-                const tokenBalances = await Moralis.EvmApi.token.getWalletTokenBalances({
-                    address: wallet as string,
-                    chain: "0xaa36a7", // Sepolia chain ID
-                });
+            if (tokenAddress === "discover_token_address") {
+                console.log("Fetching token data for suymobl");
 
-                // Special case for ETH
-                if (urlSymbol.toLowerCase() === "eth") {
-                    const balance = await Moralis.EvmApi.balance.getNativeBalance({
-                        address: wallet as string,
-                        chain: "0xaa36a7", // Sepolia chain ID
-                    });
-
-                    setToken({
-                        id: "0x0000000000000000000000000000000000000000",
-                        symbol: "ETH",
-                        name: "Ethereum",
-                        amount: balance.result.balance.toString(),
-                        value: balance.result.balance.toString(),
-                        address: "0x0000000000000000000000000000000000000000"
-                    });
-                    return;
-                }
-
-                // Filter to find the token with matching symbol
-                const matchingToken = tokenBalances.result.find(
-                    token => token.token?.symbol?.toLowerCase() === urlSymbol.toLowerCase()
-                );
-
-                if (!matchingToken) {
-                    setError(`Token with symbol ${urlSymbol} not found in wallet`);
-                    return;
-                }
-
-                // Set the token data
+                console.log("urlName:", urlName);
                 setToken({
-                    id: matchingToken.token?.contractAddress?.toString() || "",
-                    symbol: matchingToken.token?.symbol || "",
-                    name: matchingToken.token?.name || "",
-                    amount: matchingToken.amount.toString(),
-                    value: matchingToken.value,
-                    address: matchingToken.token?.contractAddress?.toString() || ""
+                    id:  urlId as string,
+                    symbol: "",
+                    name: urlName,
+                    amount: "",
+                    value: "",
+                    address:""
                 });
             } 
             // Case 2: Using specific token address
             else if (tokenAddress) {
                 // Native ETH
+                console.log("Fetching token data for address");
                 if (tokenAddress === "0x0000000000000000000000000000000000000000") {
                     const balance = await Moralis.EvmApi.balance.getNativeBalance({
                         address: wallet as string,
@@ -104,7 +73,7 @@ const TokenPage = () => {
                     });
 
                     setToken({
-                        id: "0x0000000000000000000000000000000000000000",
+                        id: "3306",
                         symbol: "ETH",
                         name: "Ethereum",
                         amount: balance.result.balance.toString(),
@@ -131,8 +100,12 @@ const TokenPage = () => {
                         const tokenMetadata = tokenData.result[0];
                         const tokenBalance = tokenBalances.result[0];
 
+                        const tokenInfo = tokensList.find(t => 
+                            t.token_symbol?.toLowerCase() === tokenMetadata.token.symbol?.toLowerCase()
+                        );
+
                         setToken({
-                            id: tokenAddress as string,
+                            id: tokenInfo?.token_id ? String(tokenInfo.token_id) : tokenAddress as string,
                             symbol: tokenMetadata.token.symbol || "",
                             name: tokenMetadata.token.name || "",
                             amount: tokenBalance.amount.toString(),
@@ -156,14 +129,14 @@ const TokenPage = () => {
 
     useEffect(() => {
         fetchTokenData();
-    }, [wallet, tokenAddress, urlSymbol]);
+    }, [wallet, tokenAddress, urlId, urlName]);
 
     const getTokenAIInfo = async () => {
         try {
             setIsLoadingAI(true);
             const res = await axiosInstance.post(`/api/v1/agents/analysis_manager/`, {
-                "token_id": "3306",
-                "token_name": "Ethereum"
+                "token_id": token?.id,
+                "token_name": token?.name,
             });
             setTokenAIInfo(res.data);
         } catch (error) {
@@ -174,9 +147,11 @@ const TokenPage = () => {
     }
 
     const loadContent = () => {
+
         const errorHtml = error ? <div>Error: {error}</div> : null;
         const loadingHtml = isLoading ? <div>Analyzing...</div> : null;
         const tokenHtml = !token ? <div>Token not found</div> : null;
+        // if there is no token, try to get it from the tokens.tsx
         let content = null;
 
         if (!error && !isLoading && token) {
@@ -190,7 +165,7 @@ const TokenPage = () => {
                     </div>
 
                     <div className='py-10 flex flex-col gap-16'>
-                        <WalletStatistics balance={Number(formatEther(BigInt(token.amount)))} />
+                    {token.address && <WalletStatistics balance={Number(formatEther(BigInt(token.amount)))} />}
                         <Button
                             onClick={getTokenAIInfo}
                             className='w-full h-[75px] bg-sky-800 text-lg font-semibold rounded-2xl hover:bg-sky-900'>

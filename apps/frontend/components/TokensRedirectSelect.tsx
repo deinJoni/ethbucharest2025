@@ -39,7 +39,7 @@ const TokenRedirectSelect = () => {
             const address = params.wallet;
 
             // Redirect to the token page with the required params
-            router.push(`/wallet/${address}/token/discover_token_address?symbol=${selectedToken.token_symbol}`);
+            router.push(`/wallet/${address}/token/discover_token_address?id=${selectedToken.token_id}&name=${selectedToken.token_name}`);
         }
     };
 
