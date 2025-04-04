@@ -13,7 +13,7 @@ export default function App() {
     if (address) {
       router.push(`/wallet/${address}`);
     }
-  }, [address]);
+  }, [address, router]);
 
   return (
     <div className="h-screen grid md:grid-cols-2 min-h-full">

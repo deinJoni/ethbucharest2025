@@ -1,7 +1,6 @@
 import '@coinbase/onchainkit/styles.css';
 import type { Metadata } from 'next';
 import './globals.css';
-import Navbar from '@/components/Navbar';
 import { OnchainKitProvider } from '@/providers/OnchainKitProvider';
 import { ThemeProvider } from '@/providers/ThemeProvider';
 import { Toaster } from '@/components/ui/toaster';
