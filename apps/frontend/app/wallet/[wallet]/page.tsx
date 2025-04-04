@@ -122,7 +122,7 @@ const WalletPage = () => {
               >
                 <div className="h-24 w-24 rounded-full overflow-hidden mb-4 bg-gray-100">
                   <img
-                    src={`https://api.dicebear.com/7.x/personas/svg?seed=${agent.id}`}
+                    src={`/agents/${agent.id}.png`}
                     alt={`${agent.name} profile`}
                     className="h-full w-full object-cover"
                   />

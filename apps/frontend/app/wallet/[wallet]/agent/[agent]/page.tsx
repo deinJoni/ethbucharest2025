@@ -186,7 +186,7 @@ const AgentDetailPage = () => {
         <div className="md:w-1/3 flex flex-col items-center">
           <div className="h-48 w-48 rounded-full overflow-hidden mb-4 bg-gray-100">
             <img
-              src={`https://api.dicebear.com/7.x/personas/svg?seed=${agent.id}`}
+              src={`/agents/${agent.id}.png`}
               alt={`${agent.name} profile`}
               className="h-full w-full object-cover"
             />
