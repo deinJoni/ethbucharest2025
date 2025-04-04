@@ -12,9 +12,9 @@ const WalletStatistics = ({ balance }: { balance: number }) => {
         <div className='flex w-full gap-6 '>
             <div className='flex flex-col gap-2'>
                 <WalletBalance balance={balance} className="" />
-                <Link href={`/wallet/${wallet}/analyst`}>
-                    <AnalystCard />
-                </Link>
+                {/* <Link href={`/wallet/${wallet}/analyst`}> */}
+                <AnalystCard />
+                {/* </Link> */}
             </div>
             <Chart className="flex-1 relative -z-[1]" />
         </div>
