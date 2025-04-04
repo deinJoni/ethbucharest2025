@@ -59,6 +59,56 @@ const StatBar = ({ label, value }: { label: string; value: number }) => {
   );
 };
 
+// Error display component for insufficient data
+const InsufficientDataError = ({
+  tokenName,
+  errorMessage,
+}: {
+  tokenName: string;
+  errorMessage: string;
+}) => {
+  const match = errorMessage.match(/Needed (\d+) days, got (\d+)/);
+  const neededDays = match ? match[1] : "sufficient";
+  const gotDays = match ? match[2] : "insufficient";
+
+  return (
+    <div className="bg-orange-50 border-l-4 border-orange-500 p-4 rounded-md">
+      <div className="flex items-center">
+        <div className="flex-shrink-0 text-orange-500">
+          <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <path
+              fillRule="evenodd"
+              d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+              clipRule="evenodd"
+            />
+          </svg>
+        </div>
+        <div className="ml-3">
+          <h3 className="text-lg font-medium text-orange-800">
+            Insufficient Historical Data
+          </h3>
+          <div className="mt-2 text-orange-700">
+            <p>
+              We couldn't analyze {tokenName} due to limited historical data.
+            </p>
+            <p className="mt-2">
+              <strong>Required:</strong> {neededDays} days of data
+            </p>
+            <p>
+              <strong>Available:</strong> {gotDays} days of data
+            </p>
+          </div>
+          <div className="mt-3">
+            <p className="text-sm text-orange-600">
+              Try again with a token that has more historical data available.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const AgentDetailPage = () => {
   const router = useRouter();
   const params = useParams();
@@ -69,6 +119,8 @@ const AgentDetailPage = () => {
   const [selectedToken, setSelectedToken] = useState<Token | null>(null);
   const [analysisResult, setAnalysisResult] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isInsufficientData, setIsInsufficientData] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
     if (params.agent) {
@@ -102,6 +154,8 @@ const AgentDetailPage = () => {
       try {
         setIsAnalyzing(true);
         setAnalysisResult("Analyzing token...");
+        setIsInsufficientData(false);
+        setErrorMessage("");
 
         // Prepare payload for API request
         const payload = {
@@ -131,7 +185,15 @@ const AgentDetailPage = () => {
 
         // Parse and display the response
         const data = await response.json();
-        setAnalysisResult(data.analysis || JSON.stringify(data, null, 2));
+
+        // Check for insufficient data error
+        if (data.error && data.error.includes("Insufficient data")) {
+          setIsInsufficientData(true);
+          setErrorMessage(data.error);
+          setAnalysisResult(null);
+        } else {
+          setAnalysisResult(data.analysis || JSON.stringify(data, null, 2));
+        }
       } catch (error) {
         console.error("Error analyzing token:", error);
         setAnalysisResult(
@@ -330,7 +392,14 @@ const AgentDetailPage = () => {
               </div>
             )}
 
-            {analysisResult && (
+            {isInsufficientData && (
+              <InsufficientDataError
+                tokenName={selectedToken?.token_name || "the token"}
+                errorMessage={errorMessage}
+              />
+            )}
+
+            {analysisResult && !isInsufficientData && (
               <div className="mt-4 p-4 border border-blue-200 rounded-md bg-blue-50">
                 <h3 className="font-medium text-lg mb-2">Analysis Result</h3>
                 <p className="whitespace-pre-wrap">{analysisResult}</p>
