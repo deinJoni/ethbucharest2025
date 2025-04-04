@@ -7,11 +7,9 @@ const layout = ({ children }: { children: React.ReactNode }) => {
         <div className="w-full h-screen flex justify-end">
             {/* Fixed left column */}
             <div
-                className="w-1/4 fixed top-0 left-0 h-screen z-10"
+                className="w-1/4 fixed top-0 left-0 h-screen z-10 landingLeft"
                 style={{
-                    backgroundImage: `url('/landing-left-bg.jpg')`,
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'center'
+                    backgroundImage: `url('/landing-left-bg.jpg')`
                 }}
             >   
                 <div className="w-full h-screen fixed">
