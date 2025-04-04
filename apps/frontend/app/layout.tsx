@@ -5,6 +5,7 @@ import Navbar from '@/components/Navbar';
 import { OnchainKitProvider } from '@/providers/OnchainKitProvider';
 import { ThemeProvider } from '@/providers/ThemeProvider';
 import { Toaster } from '@/components/ui/toaster';
+import CheckIfWalletIsConnected from '@/providers/CheckIfWalletIsConnected';
 
 export const metadata: Metadata = {
   title: process.env.NEXT_PUBLIC_ONCHAINKIT_PROJECT_NAME,
@@ -16,7 +17,6 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-
   return (
     <html lang="en">
       <body className="bg-background">
@@ -26,11 +26,15 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <OnchainKitProvider>
-            <Navbar />
-            {children}
-          </OnchainKitProvider>
-          <Toaster />
+          <div className="w-full h-full">
+            <OnchainKitProvider>
+              <CheckIfWalletIsConnected>
+                {/* <Navbar /> */}
+                {children}
+              </CheckIfWalletIsConnected>
+            </OnchainKitProvider>
+            <Toaster />
+          </div>
         </ThemeProvider>
       </body>
     </html>

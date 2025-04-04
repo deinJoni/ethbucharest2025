@@ -33,12 +33,6 @@ const WalletPage = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!address) {
-      router.push(`/`);
-    }
-  }, [address]);
-
-  useEffect(() => {
     const fetchTokenData = async () => {
       if (!address) return;
 
@@ -99,7 +93,7 @@ const WalletPage = () => {
   return (
     <div className="w-full flex justify-center">
       <Preferences address={address} />
-      <div className="flex flex-col items-center justify-center max-w-6xl py-10">
+      <div className="flex flex-col items-center justify-center py-10">
         {/* <div className="flex flex-col items-center justify-center mt-5">
           <h1 className="text-2xl font-bold">Wallet</h1>
           <p className="text-sm text-gray-500">{address}</p>
