@@ -406,7 +406,7 @@ const AgentDetailPage = () => {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
+    <div className="container mx-auto px-4 py-8 w-full">
       <Link
         href={`/wallet/${params.wallet}`}
         className="inline-flex items-center mb-6 text-blue-600 hover:text-blue-800"
