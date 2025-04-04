@@ -51,6 +51,21 @@ type Token = {
   token_symbol: string;
 };
 
+// Add new type for analysis result
+type AnalysisResult = {
+  signal: string;
+  llm_reasoning: string;
+  error: string | null;
+  steps: Array<{
+    step: number;
+    description: string;
+    observation?: any;
+    action?: string;
+    action_input?: any;
+    llm_output?: string;
+  }>;
+};
+
 // Stat bar component to display agent stats
 const StatBar = ({ label, value }: { label: string; value: number }) => {
   return (
@@ -70,6 +85,142 @@ const StatBar = ({ label, value }: { label: string; value: number }) => {
           }`}
           style={{ width: `${value}%` }}
         ></div>
+      </div>
+    </div>
+  );
+};
+
+// Signal result component to display trading signal
+const SignalResult = ({ analysisData }: { analysisData: AnalysisResult }) => {
+  const signal = analysisData.signal;
+  const reasoning = analysisData.llm_reasoning;
+
+  // Parse key metrics from the reasoning text
+  const parseMetrics = (text: string) => {
+    const metrics: { [key: string]: string } = {};
+
+    // Try to extract Latest Trader Grade
+    const latestTGMatch =
+      text.match(
+        /Latest Trader Grade \(TG\):\s*The TG for \w+ stands at (\d+\.?\d*)/i
+      ) || text.match(/Latest TG:\s*(\d+\.?\d*)/i);
+    if (latestTGMatch) metrics["Latest Trader Grade"] = latestTGMatch[1];
+
+    // Try to extract 24h Trader Grade Change
+    const tgcMatch =
+      text.match(
+        /24h Trader Grade Change \(TGC\):\s*The TGC has experienced a .* of (-?\d+\.?\d*)%/i
+      ) || text.match(/TGC:\s*(-?\d+\.?\d*)%/i);
+    if (tgcMatch) metrics["24h TG Change"] = tgcMatch[1] + "%";
+
+    // Try to extract 5-Day Average TG
+    const avgTGMatch =
+      text.match(
+        /5-Day Average TG:\s*The five-day average TG for \w+ is calculated at (\d+\.?\d*)/i
+      ) || text.match(/5-Day Average TG:\s*(\d+\.?\d*)/i);
+    if (avgTGMatch) metrics["5-Day Average TG"] = avgTGMatch[1];
+
+    // Extract Quant Grade if available from API response
+    if (
+      analysisData.steps &&
+      analysisData.steps.length > 0 &&
+      analysisData.steps[0].observation &&
+      analysisData.steps[0].observation.quant_grade
+    ) {
+      metrics["Quant Grade"] =
+        analysisData.steps[0].observation.quant_grade.toFixed(2);
+    }
+
+    // Extract Momentum if available from API response
+    if (
+      analysisData.steps &&
+      analysisData.steps.length > 0 &&
+      analysisData.steps[0].observation &&
+      analysisData.steps[0].observation.pct_change_tg !== undefined
+    ) {
+      metrics["Momentum"] =
+        (analysisData.steps[0].observation.pct_change_tg * 100).toFixed(2) +
+        "%";
+    }
+
+    return metrics;
+  };
+
+  // Format reasoning text for better display
+  const formatReasoning = (text: string) => {
+    // Check if reasoning contains a title/header
+    const headerMatch = text.match(
+      /\*\*([\w\s]+Trading Signal Analysis: [A-Z]+)\*\*/
+    );
+    const header = headerMatch ? headerMatch[1] : null;
+
+    // If there's a header, remove it from the main text
+    let mainText = text;
+    if (header) {
+      mainText = text.replace(
+        /\*\*([\w\s]+Trading Signal Analysis: [A-Z]+)\*\*/,
+        ""
+      );
+    }
+
+    // Clean up markdown asterisks and format paragraphs
+    mainText = mainText.replace(/\*\*/g, "").trim();
+
+    return { header, mainText };
+  };
+
+  // Parse metrics and format reasoning
+  const metrics = parseMetrics(reasoning);
+  const { header, mainText } = formatReasoning(reasoning);
+
+  // Get signal color
+  const getSignalColor = (signal: string) => {
+    switch (signal.toUpperCase()) {
+      case "BUY":
+        return "bg-green-100 text-green-800 border-green-300";
+      case "SELL":
+        return "bg-red-100 text-red-800 border-red-300";
+      case "HOLD":
+        return "bg-yellow-100 text-yellow-800 border-yellow-300";
+      default:
+        return "bg-blue-100 text-blue-800 border-blue-300";
+    }
+  };
+
+  return (
+    <div className="mt-4 p-5 border rounded-md bg-white">
+      <div className="flex flex-col space-y-4">
+        {header && <h3 className="text-xl font-semibold">{header}</h3>}
+
+        <div className="flex items-center">
+          <div
+            className={`px-4 py-2 rounded-lg text-xl font-bold ${getSignalColor(
+              signal
+            )}`}
+          >
+            {signal}
+          </div>
+        </div>
+
+        {/* Display extracted metrics if available */}
+        {Object.keys(metrics).length > 0 && (
+          <div className="mt-2 p-4 bg-gray-50 rounded-md">
+            <h3 className="text-lg font-medium mb-3">Key Metrics:</h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {Object.entries(metrics).map(([key, value]) => (
+                <div key={key} className="flex flex-col">
+                  <span className="text-sm text-gray-500">{key}</span>
+                  <span className="font-semibold">{value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="mt-2">
+          <h3 className="text-lg font-medium mb-2">Analysis:</h3>
+          <p className="text-gray-700 whitespace-pre-wrap">{mainText}</p>
+        </div>
       </div>
     </div>
   );
@@ -134,7 +285,9 @@ const AgentDetailPage = () => {
   const [selectedTokenId, setSelectedTokenId] = useState<string>("");
   const [selectedToken, setSelectedToken] = useState<Token | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [analysisResult, setAnalysisResult] = useState<string | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(
+    null
+  );
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isInsufficientData, setIsInsufficientData] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -222,7 +375,8 @@ const AgentDetailPage = () => {
         } else if (!response.ok) {
           throw new Error(`API responded with status: ${response.status}`);
         } else {
-          setAnalysisResult(data.analysis || JSON.stringify(data, null, 2));
+          // Handle the new response format
+          setAnalysisResult(data);
         }
       } catch (error) {
         console.error("Error analyzing token:", error);
@@ -473,10 +627,7 @@ const AgentDetailPage = () => {
             )}
 
             {analysisResult && !isInsufficientData && !errorMessage && (
-              <div className="mt-4 p-4 border border-blue-200 rounded-md bg-blue-50">
-                <h3 className="font-medium text-lg mb-2">Analysis Result</h3>
-                <p className="whitespace-pre-wrap">{analysisResult}</p>
-              </div>
+              <SignalResult analysisData={analysisResult} />
             )}
           </div>
 
