@@ -21,7 +21,7 @@ const riskProfiles = [
     value: "SAFE",
     name: "Conservative",
     description: "Lower risk, stable returns",
-    emoji: "🧘",
+    emoji: "types_conservative.svg",
     color: "green",
   },
   {
@@ -29,15 +29,15 @@ const riskProfiles = [
     value: "BALANCED",
     name: "Moderate",
     description: "Balanced risk and return",
-    emoji: "🏄",
-    color: "yellow",
+    emoji: "types_moderate.svg",
+    color: "blue",
   },
   {
     id: 3,
     value: "HIGH_RISK",
     name: "Aggressive",
     description: "Higher risk, higher potential",
-    emoji: "🚀",
+    emoji: "types_aggressive.svg",
     color: "red",
   },
 ];
@@ -248,7 +248,13 @@ const Preferences = ({ address }: { address: string }) => {
                             ${isSelected ? "scale-110" : ""}
                           `}
                           >
-                            {profile.emoji}
+                          <img
+                            src={`/icons/${profile.emoji}`}
+                            className=""
+                            width={180}
+                            height={200}
+                          />
+
                           </div>
                           <h3
                             className={`

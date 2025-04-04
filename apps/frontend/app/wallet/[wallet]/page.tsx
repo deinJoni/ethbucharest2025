@@ -147,7 +147,7 @@ const WalletPage = () => {
                   </span>
                 </div>
                 <Link href={`/wallet/${address}/agent/${agent.id}`}>
-                  <button className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
+                  <button className="mt-4 px-4 py-2 bg-sky-800 text-white rounded-md hover:bg-blue-700 transition-colors">
                     View Details
                   </button>
                 </Link>
