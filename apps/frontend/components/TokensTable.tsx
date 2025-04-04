@@ -14,6 +14,8 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { ArrowUpDown, ChevronDown } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useAccount } from "wagmi";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -33,6 +35,7 @@ import {
 } from "@/components/ui/table";
 import { Token } from "@/types";
 import { formatEther } from "viem";
+
 export const columns: ColumnDef<Token>[] = [
   {
     accessorKey: "symbol",
@@ -72,17 +75,13 @@ export const columns: ColumnDef<Token>[] = [
   // },
 ];
 
-interface TokensTableProps {
-  data: Token[];
-}
-
-export function TokensTable({ data }: TokensTableProps) {
+export function TokensTable({ data }: { data: Token[] }) {
+  const router = useRouter();
+  const { address } = useAccount();
+  
   const [sorting, setSorting] = React.useState<SortingState>([]);
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
-    []
-  );
-  const [columnVisibility, setColumnVisibility] =
-    React.useState<VisibilityState>({});
+  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
+  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState({});
 
   const table = useReactTable({
@@ -173,6 +172,8 @@ export function TokensTable({ data }: TokensTableProps) {
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
+                  className="cursor-pointer hover:bg-muted/50"
+                  onClick={() => router.push(`/wallet/${address}/token/${row.original.id}`)}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
