@@ -14,7 +14,8 @@ import { RadioGroup, RadioGroupItem } from "./ui/radio-group";
 import { Label } from "./ui/label";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-
+import useProfileStore from "@/store/profile";
+import { axiosInstance } from "@/axios";
 const riskProfiles = [
   {
     id: 1,
@@ -52,6 +53,8 @@ const Preferences = ({ address }: { address: string }) => {
   const [name, setName] = useState("");
   const [nameError, setNameError] = useState(false);
 
+  const { profile, setProfile } = useProfileStore();
+
   const updatePreferences = async () => {
     try {
       const res = await axios.post(
@@ -69,6 +72,10 @@ const Preferences = ({ address }: { address: string }) => {
       if (!res.data.risk_profile || !res.data.name) {
         setOpen(true);
       }
+
+      if (res.data.name) {
+        setProfile({ name: res.data.name });
+      }
     } catch (error) {
       console.log("error", error);
     }
@@ -83,19 +90,14 @@ const Preferences = ({ address }: { address: string }) => {
     setIsSubmitting(true);
     try {
       console.log("Submitting preferences:", riskProfile, "Name:", name);
-      const res = await axios.post(
+      const res = await axiosInstance.post(
         `${process.env.NEXT_PUBLIC_API_URL}/wallets`,
         {
           address: address,
           risk_profile: riskProfile,
           name: name || "Anonymous",
         },
-        {
-          headers: {
-            "X-Skip-Browser-Warning": "true",
-            "ngrok-skip-browser-warning": "69420",
-          },
-        }
+        
       );
       setOpen(false);
     } catch (error) {
@@ -116,19 +118,14 @@ const Preferences = ({ address }: { address: string }) => {
       const safeRiskProfile = "SAFE";
       console.log("Skipping, defaulting to:", safeRiskProfile);
 
-      const res = await axios.post(
+      const res = await axiosInstance.post(
         `${process.env.NEXT_PUBLIC_API_URL}/wallets`,
         {
           address: address,
           risk_profile: safeRiskProfile,
           name: "Anonymous", // Always use "Anonymous" when skipping
         },
-        {
-          headers: {
-            "X-Skip-Browser-Warning": "true",
-            "ngrok-skip-browser-warning": "69420",
-          },
-        }
+       
       );
       setOpen(false);
     } catch (error) {
@@ -171,9 +168,8 @@ const Preferences = ({ address }: { address: string }) => {
               placeholder="Anonymous"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className={`w-full ${
-                nameError ? "border-red-500 focus-visible:ring-red-500" : ""
-              }`}
+              className={`w-full ${nameError ? "border-red-500 focus-visible:ring-red-500" : ""
+                }`}
             />
             {nameError && (
               <p className="text-red-500 text-sm mt-1">
@@ -213,15 +209,13 @@ const Preferences = ({ address }: { address: string }) => {
                     <div
                       className={`
                         relative rounded-xl overflow-hidden transition-all duration-200
-                        ${
-                          isSelected
-                            ? "ring-2 ring-offset-2"
-                            : "hover:shadow-md"
+                        ${isSelected
+                          ? "ring-2 ring-offset-2"
+                          : "hover:shadow-md"
                         }
-                        ${
-                          profile.id === 1
-                            ? "ring-green-500"
-                            : profile.id === 2
+                        ${profile.id === 1
+                          ? "ring-green-500"
+                          : profile.id === 2
                             ? "ring-amber-500"
                             : "ring-rose-500"
                         }
@@ -230,15 +224,14 @@ const Preferences = ({ address }: { address: string }) => {
                       <div
                         className={`
                         h-full p-6 flex flex-col items-center justify-between
-                        ${
-                          isSelected
+                        ${isSelected
                             ? profile.id === 1
                               ? "bg-green-50"
                               : profile.id === 2
-                              ? "bg-amber-50"
-                              : "bg-rose-50"
+                                ? "bg-amber-50"
+                                : "bg-rose-50"
                             : "bg-card hover:bg-muted/50"
-                        }
+                          }
                       `}
                       >
                         <div className="flex flex-col items-center text-center">
@@ -253,15 +246,14 @@ const Preferences = ({ address }: { address: string }) => {
                           <h3
                             className={`
                             font-semibold text-lg mb-1
-                            ${
-                              isSelected
+                            ${isSelected
                                 ? profile.id === 1
                                   ? "text-green-700"
                                   : profile.id === 2
-                                  ? "text-amber-700"
-                                  : "text-rose-700"
+                                    ? "text-amber-700"
+                                    : "text-rose-700"
                                 : "text-foreground"
-                            }
+                              }
                           `}
                           >
                             {profile.name}
@@ -275,10 +267,9 @@ const Preferences = ({ address }: { address: string }) => {
                           <div
                             className={`
                               absolute top-3 right-3 w-5 h-5 rounded-full flex items-center justify-center
-                              ${
-                                profile.id === 1
-                                  ? "bg-green-500"
-                                  : profile.id === 2
+                              ${profile.id === 1
+                                ? "bg-green-500"
+                                : profile.id === 2
                                   ? "bg-amber-500"
                                   : "bg-rose-500"
                               }
