@@ -8,6 +8,10 @@ import Moralis from "moralis";
 import { Erc20Value, EvmNative } from "moralis/common-evm-utils";
 import Preferences from "@/components/Preferences";
 import { TokensTable } from "@/components/TokensTable";
+import { Token } from "@/types";
+import WalletStatistics from "@/components/WalletStatistics";
+import { formatEther } from "@/lib/utils";
+import { Loader2 } from "lucide-react"
 
 // Initialize Moralis outside component
 if (!Moralis.Core.isStarted) {
@@ -20,99 +24,11 @@ const WalletPage = () => {
   const router = useRouter();
   const { address } = useAccount();
 
-  const [tokens, setTokens] = useState<Erc20Value[]>([]);
-  const [nativeBalance, setNativeBalance] = useState<EvmNative | null>(null);
-  console.log(nativeBalance);
+  const [tokens, setTokens] = useState<Token[]>([]);
+  // const [nativeBalance, setNativeBalance] = useState<EvmNative | null>(null);
+  const [nativeBalance, setNativeBalance] = useState<Token | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // Mock token data for the table
-  const mockTokens = [
-    {
-      id: "1",
-      symbol: "USDC",
-      name: "USD Coin",
-      amount: "1000.00",
-      value: "$1000.00",
-    },
-    {
-      id: "2",
-      symbol: "USDT",
-      name: "Tether",
-      amount: "500.50",
-      value: "$500.50",
-    },
-    {
-      id: "3",
-      symbol: "DAI",
-      name: "Dai Stablecoin",
-      amount: "750.25",
-      value: "$750.25",
-    },
-    {
-      id: "4",
-      symbol: "WETH",
-      name: "Wrapped Ether",
-      amount: "1.5",
-      value: "$3000.00",
-    },
-    {
-      id: "5",
-      symbol: "WBTC",
-      name: "Wrapped Bitcoin",
-      amount: "0.05",
-      value: "$2000.00",
-    },
-    {
-      id: "6",
-      symbol: "UNI",
-      name: "Uniswap",
-      amount: "100.00",
-      value: "$500.00",
-    },
-    {
-      id: "7",
-      symbol: "AAVE",
-      name: "Aave",
-      amount: "10.00",
-      value: "$800.00",
-    },
-    {
-      id: "8",
-      symbol: "LINK",
-      name: "Chainlink",
-      amount: "25.00",
-      value: "$250.00",
-    },
-    {
-      id: "9",
-      symbol: "SNX",
-      name: "Synthetix",
-      amount: "200.00",
-      value: "$400.00",
-    },
-    {
-      id: "10",
-      symbol: "MKR",
-      name: "Maker",
-      amount: "0.75",
-      value: "$750.00",
-    },
-    {
-      id: "11",
-      symbol: "COMP",
-      name: "Compound",
-      amount: "5.00",
-      value: "$300.00",
-    },
-    {
-      id: "12",
-      symbol: "YFI",
-      name: "yearn.finance",
-      amount: "0.01",
-      value: "$250.00",
-    },
-  ];
 
   useEffect(() => {
     if (!address) {
@@ -141,8 +57,21 @@ const WalletPage = () => {
           chain: "0xaa36a7", // Sepolia chain ID
         });
 
-        setTokens(tokenBalances.result);
-        setNativeBalance(balance.result.balance);
+        setTokens(tokenBalances.result.map((token, index) => ({
+          id: index.toString(),
+          symbol: token.token?.symbol ?? "",
+          name: token.token?.name ?? "",
+          amount: token.amount.toString(),
+          value: token.value,
+        })));
+
+        setNativeBalance({
+          id: "native",
+          symbol: "ETH",
+          name: "Ethereum",
+          amount: balance.result.balance.toString(),
+          value: balance.result.balance.toString(),
+        });
       } catch (err) {
         console.error("Error fetching token data:", err);
         setError("Failed to load token data");
@@ -154,24 +83,28 @@ const WalletPage = () => {
     fetchTokenData();
   }, [address]);
 
-  if (isLoading || !address) return <div>Loading...</div>;
+  if (isLoading || !address) return <div className="flex flex-col items-center justify-center h-screen"><Loader2 className="w-10 h-10 animate-spin" />Loading...</div>;
   if (error) return <div>Error: {error}</div>;
   console.log("tokens", tokens);
   return (
-    <>
+    <div className="w-full flex justify-center">
       <Preferences address={address} />
-      <div className="flex flex-col items-center justify-center">
-        <div className="flex flex-col items-center justify-center">
+      <div className="flex flex-col items-center justify-center max-w-6xl py-10">
+        {/* <div className="flex flex-col items-center justify-center mt-5">
           <h1 className="text-2xl font-bold">Wallet</h1>
           <p className="text-sm text-gray-500">{address}</p>
-        </div>
+        </div> */}
 
-        <div className="w-full max-w-4xl mt-8">
+        <WalletStatistics balance={formatEther(nativeBalance?.amount ?? 0)} />
+
+        <div className="w-full mt-8">
           <h1 className="text-2xl font-bold mb-4">Your Tokens</h1>
-          <TokensTable data={mockTokens} />
+          <TokensTable data={[
+            ...tokens
+          ]} />
         </div>
 
-        <div className="w-full max-w-4xl mt-12">
+        <div className="w-full mt-12">
           <h1 className="text-2xl font-bold mb-4">Trading Agents</h1>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[
@@ -265,7 +198,7 @@ const WalletPage = () => {
           </div>
         </div> */}
       </div>
-    </>
+    </div>
   );
 };
 

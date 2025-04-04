@@ -24,3 +24,7 @@ export const truncate = ({ text, startChars, endChars, maxLength }: TruncatePara
   }
   return text
 }
+
+export const formatEther = (amount: string | number) => {
+  return Number(amount) / 10 ** 18
+}
