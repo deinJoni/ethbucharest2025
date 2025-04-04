@@ -8,6 +8,7 @@ from uuid import uuid4 # Import uuid for thread_id generation
 from typing import List, Dict, Any, Optional # Import List, Dict, Any, Optional
 from agents.sma_agent import app as crypto_graph_app
 from agents.bounce_hunter import app as bounce_hunter_graph_app
+from agents.crypto_oracle import app as crypto_oracle_app
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -37,13 +38,17 @@ class SMAResponse(BaseModel):
     analysis: str | None = None
     error: str | None = None
     steps: List[Dict[str, Any]] | None = None # Add steps field
-# ------------------------------
 
-# --- New Model for Bounce Hunter Agent ---
-# class BounceHunterRequest(BaseModel): # Replaced by SMARequest
-#     symbol: str
+# --- New Models for Crypto Oracle Agent ---
+class OracleRequest(BaseModel):
+    token_id: str # Input token ID
+    token_name: Optional[str] = None # Input token name (optional, like SMA agent)
 
-# ---------------------------------------
+# Use a similar response structure
+class OracleResponse(BaseModel):
+    analysis: str | None = None
+    error: str | None = None
+    steps: List[Dict[str, Any]] | None = None
 
 @router.post("/example_agent")
 async def ask_example_agent(req: AgentRequest):
@@ -204,3 +209,75 @@ async def ask_bounce_hunter_agent(req: SMARequest): # Use SMARequest
     except Exception as e:
         logger.exception("Unhandled error processing bounce_hunter_agent request")
         return SMAResponse(analysis=None, error=f"An unexpected server error occurred: {str(e)}", steps=None)
+
+# New endpoint for Crypto Oracle Agent
+@router.post("/crypto_oracle_agent", response_model=OracleResponse)
+async def ask_crypto_oracle_agent(req: OracleRequest):
+    # Construct input data matching the agent state
+    input_data = {"token_id": req.token_id, "token_name": req.token_name or "Unknown"}
+
+    try:
+        config = {"configurable": {"thread_id": str(uuid4())}}
+        logger.info(f"Invoking crypto_oracle_agent graph with input: {input_data}")
+        # The graph expects the input under an "input" key
+        final_state = crypto_oracle_app.invoke({"input": input_data}, config=config)
+        logger.info(f"Crypto Oracle graph final state: {final_state}")
+
+        # --- Format Steps (Similar to Bounce Hunter) --- #
+        formatted_steps = []
+        intermediate_steps = final_state.get("intermediate_steps", [])
+        # Get the final explanation from the LLM reasoning node
+        final_explanation = final_state.get("llm_reasoning", "Error: LLM explanation not found in final state.")
+
+        # Check if the final explanation itself indicates an error occurred upstream
+        tool_or_llm_error = None
+        # Errors from the tool or LLM generation are now passed into llm_reasoning
+        if final_explanation.startswith("Analysis Error") or \
+           final_explanation.startswith("Error: Analysis data not found") or \
+           final_explanation.startswith("Error generating explanation"):
+            tool_or_llm_error = final_explanation
+            logger.warning(f"Crypto Oracle graph processing resulted in an error message: {tool_or_llm_error}")
+
+        # Log the steps (now contains action and the dict result from the tool)
+        step_count = 1
+        if intermediate_steps:
+            # intermediate_steps is list[tuple[AgentAction, Dict[str, Any]]]
+            for action, observation_dict in intermediate_steps:
+                # Ensure action is AgentAction before trying to access attributes
+                if isinstance(action, AgentAction):
+                    formatted_steps.append({
+                        "step": step_count,
+                        "description": "Executing crypto oracle analysis tool",
+                        "action": getattr(action, 'tool', 'unknown_tool'),
+                        "action_input": getattr(action, 'tool_input', 'unknown_input'),
+                        "observation": observation_dict # Log the dictionary
+                    })
+                else:
+                    # Handle unexpected step format (e.g., the dummy error action)
+                    formatted_steps.append({
+                        "step": step_count,
+                        "description": "Unexpected step format or error",
+                        "raw_step_data": (action, observation_dict)
+                    })
+                step_count += 1
+
+        # Add the LLM reasoning step
+        formatted_steps.append({
+            "step": step_count,
+            "description": "Generating final explanation (LLM)",
+            "input_data_for_llm": final_state.get("analysis_data", {}).get("reasoning_components", {}), # Show what LLM might have used
+            "llm_output": final_explanation
+        })
+        # --- End Format Steps --- #
+
+        # Return based on whether an error occurred
+        if tool_or_llm_error:
+            # Return the error message from llm_reasoning as the error field
+            return OracleResponse(analysis=None, error=tool_or_llm_error, steps=formatted_steps)
+        else:
+            # Return the successful explanation as the analysis field
+            return OracleResponse(analysis=final_explanation, error=None, steps=formatted_steps)
+
+    except Exception as e:
+        logger.exception("Unhandled error processing crypto_oracle_agent request")
+        return OracleResponse(analysis=None, error=f"An unexpected server error occurred: {str(e)}", steps=None)

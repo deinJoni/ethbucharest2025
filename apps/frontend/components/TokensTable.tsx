@@ -31,15 +31,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-export type Token = {
-  id: string;
-  symbol: string;
-  name: string;
-  amount: string;
-  value: string;
-};
-
+import { Token } from "@/types";
+import { formatEther } from "viem";
 export const columns: ColumnDef<Token>[] = [
   {
     accessorKey: "symbol",
@@ -65,18 +58,18 @@ export const columns: ColumnDef<Token>[] = [
   },
   {
     accessorKey: "amount",
-    header: "Amount",
+    header: () => <div className="text-right">Amount</div>,
     cell: ({ row }) => (
-      <div className="text-right">{row.getValue("amount")}</div>
+      <div className="text-right">{Number(formatEther(row.getValue("amount"))).toFixed(4)}</div>
     ),
   },
-  {
-    accessorKey: "value",
-    header: "Value (USD)",
-    cell: ({ row }) => (
-      <div className="text-right">{row.getValue("value")}</div>
-    ),
-  },
+  // {
+  //   accessorKey: "value",
+  //   header: "Value (USD)",
+  //   cell: ({ row }) => (
+  //     <div className="text-right">{row.getValue("value")}</div>
+  //   ),
+  // },
 ];
 
 interface TokensTableProps {
