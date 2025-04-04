@@ -21,8 +21,7 @@ export default function RootLayout({
       <body className="bg-background">
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
-          enableSystem
+          defaultTheme="light"
           disableTransitionOnChange
         >
           <div className="w-full h-full">
