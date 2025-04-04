@@ -276,7 +276,9 @@ reasoning_prompt = PromptTemplate.from_template(
 
     **Explanation:**
 
-    Elaborate on this result. Clearly explain *why* the signal is {signal} based on the specific reason calculated and the metric values provided ({latest_tg_str}, {tgc_24h_str}, {avg_tg_5d_str}). Maintain a professional and objective tone suitable for a financial analysis website. Stick to the facts from this analysis.
+    Start your explanation with "The signal determined for {token_symbol} is {signal}." - This exact format is critical.
+    
+    Then elaborate on this result. Clearly explain *why* the signal is {signal} based on the specific reason calculated and the metric values provided ({latest_tg_str}, {tgc_24h_str}, {avg_tg_5d_str}). Maintain a professional and objective tone suitable for a financial analysis website. Stick to the facts from this analysis.
     """
 )
 
