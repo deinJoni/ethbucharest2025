@@ -1,0 +1,100 @@
+{
+    "agents": [
+      {
+        "id": "sma-sensei",
+        "name": "SMA Sensei",
+        "description": "Disciplined, patient agent that waits for clean signals from moving averages—like a traditional technical analyst who values clarity over chaos.",
+        "riskScore": 3,
+        "riskLevel": "Low to Moderate",
+        "strategy": "Trend confirmation using SMA crossovers",
+        "indicators": ["SMA20", "SMA50"],
+        "personality": "Disciplined and patient, SMA Sensei approaches the market with zen-like calm. This agent values order, consistency, and clear signals while avoiding impulsive decisions. Like a traditional master, it passes on time-tested wisdom without chasing the latest fads.",
+        "tags": ["Trend Following", "Low Risk", "Technical Analysis", "Daily Trading", "Beginner Friendly"],
+        "stats": {
+          "patience": 85,
+          "aggressiveness": 30,
+          "adaptability": 45
+        },
+        "strengths": [
+          "Rule-based, reducing emotional trading",
+          "Great for trending markets (especially post-breakout)",
+          "Good starting point to layer in risk management or momentum filters"
+        ],
+        "weaknesses": [
+          "Might be slow to react to sharp reversals",
+          "Binary signal without position sizing or stop-loss",
+          "Assumes trend-following is viable in any market"
+        ],
+        "improvements": [
+          "Add market sentiment or market regime filters",
+          "Integrate support/resistance or volume analysis to avoid fakeouts",
+          "Add stop-loss logic or dynamic exit points for risk control",
+          "Allow user-defined parameters for SMA windows"
+        ],
+        "alternativeNames": [
+          "Crossover Monk",
+          "Zen MA Trader",
+          "Mister Momentum",
+          "Crypto Mover"
+        ],
+        "riskBreakdown": {
+          "marketTiming": "Positive - SMA crossovers lag a bit—good for catching sustained trends, bad for timing tops/bottoms",
+          "indicatorsUsed": "Positive - Simple and transparent—SMA20 and SMA50—no complex or overfit signals",
+          "frequency": "Positive - Daily data (low frequency), reduces noise",
+          "volatilityExposure": "Negative - Doesn't explicitly manage volatility—might be slow to react to sharp reversals",
+          "positionSizeLogic": "Negative - Currently binary signal (Buy/Sell/No Signal), no position sizing or stop-loss",
+          "marketConditions": "Negative - Assumes trend-following is viable in any market which may not always be true"
+        },
+        "apiEndpoint": "/api/v1/agents/crypto_sma_agent/"
+      },
+      {
+        "id": "bounce-hunter",
+        "name": "Bounce Hunter",
+        "description": "Patient sniper, not in a hurry. Waits quietly for price to approach historically important levels, and only then prepares to strike. Focuses on high-probability bounce or breakout zones based on human psychology of previous price memory.",
+        "riskScore": 2,
+        "riskLevel": "Low",
+        "strategy": "Monitoring price action relative to historical support and resistance levels",
+        "indicators": ["Support/Resistance Levels", "Price Action"],
+        "personality": "A methodical sniper with infinite patience, Bounce Hunter is not moved by market noise or FOMO. This agent has a calm, calculated approach, waiting for the perfect setup before acting. It values precision over frequency and quality over quantity in its trades.",
+        "tags": ["Support/Resistance", "Price Action", "Low Risk", "Swing Trading", "Counter-Trend"],
+        "stats": {
+          "patience": 95,
+          "aggressiveness": 25,
+          "adaptability": 40
+        },
+        "strengths": [
+          "Patience-based approach reduces overtrading",
+          "Focuses on high-probability setups",
+          "Based on proven price memory psychology",
+          "Works in ranging and trending markets"
+        ],
+        "weaknesses": [
+          "May miss opportunities outside of defined levels",
+          "Support/resistance can break unexpectedly",
+          "Limited by quality of historical level data",
+          "Does not consider volume or broader market context"
+        ],
+        "improvements": [
+          "Add sentiment analysis to confirm signals",
+          "Incorporate volume analysis for bounce/breakout strength confirmation",
+          "Add dynamic threshold based on asset volatility",
+          "Implement confidence scoring based on historical level validity"
+        ],
+        "alternativeNames": [
+          "Level Sniper",
+          "Zone Stalker",
+          "Support Sentinel",
+          "Resistance Ranger"
+        ],
+        "riskBreakdown": {
+          "marketTiming": "Positive - Only trades near established zones with historical importance",
+          "indicatorsUsed": "Positive - Simple and transparent approach using key levels",
+          "frequency": "Positive - Patient waiting for high-probability setups reduces trading frequency",
+          "volatilityExposure": "Neutral - Does not explicitly manage volatility but trades at less volatile pivot points",
+          "positionSizeLogic": "Negative - Binary signal approach without position sizing recommendations",
+          "marketConditions": "Neutral - Works in both ranging and trending markets with different applications"
+        },
+        "apiEndpoint": "/api/v1/agents/bounce_hunter_agent/"
+      }
+    ]
+  }
