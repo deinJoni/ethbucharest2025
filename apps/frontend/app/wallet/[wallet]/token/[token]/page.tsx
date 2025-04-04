@@ -23,7 +23,7 @@ if (!Moralis.Core.isStarted) {
 
 const TokenPage = () => {
     // Get route params and query params
-    let { wallet, token: tokenAddress } = useParams();
+    const { wallet, token: tokenAddress } = useParams();
     const searchParams = useSearchParams();
     const urlId = searchParams.get('id');
     const urlName = searchParams.get('name');
