@@ -64,9 +64,15 @@ class ManagerRequest(BaseModel):
 
 class ManagerResponse(BaseModel):
     final_summary: Optional[str] = None
+    final_signal: Optional[str] = None  # Manager's derived recommendation (BUY, SELL, HOLD)
     sma_analysis: Optional[str] = None
+    sma_signal: Optional[str] = None  # SMA agent's signal
     bounce_analysis: Optional[str] = None
+    bounce_signal: Optional[str] = None  # Bounce hunter's signal
     oracle_analysis: Optional[str] = None
+    oracle_signal: Optional[str] = None  # Oracle agent's signal
+    momentum_analysis: Optional[str] = None  # New field for momentum analysis
+    momentum_signal: Optional[str] = None  # New field for momentum signal
     error: Optional[str] = None # For overall errors or summary of sub-errors
 
 # Update route to use new models and simplified logic
@@ -472,10 +478,119 @@ async def ask_analysis_manager(req: ManagerRequest):
 
         # Extract results from the final state
         final_summary = final_state.get("final_summary")
+        final_signal = final_state.get("final_signal")  # Get the signal directly from the state
         sma_result = final_state.get("sma_result")
         bounce_result = final_state.get("bounce_result")
         oracle_result = final_state.get("oracle_result")
+        momentum_result = final_state.get("momentum_result")
         sub_errors = final_state.get("error_messages", [])
+
+        # Extract signals from each agent's analysis
+        sma_signal = None
+        bounce_signal = None
+        oracle_signal = None
+        momentum_signal = None
+
+        # Extract signals from individual analyses
+        # SMA
+        if sma_result and isinstance(sma_result, str):
+            sma_upper = sma_result.upper()
+            # New pattern for SMA agent
+            if "THE SIGNAL DETERMINED" in sma_upper and "IS SELL" in sma_upper:
+                sma_signal = "SELL"
+            elif "THE SIGNAL DETERMINED" in sma_upper and "IS BUY" in sma_upper:
+                sma_signal = "BUY"
+            elif "THE SIGNAL DETERMINED" in sma_upper and "IS NO SIGNAL" in sma_upper:
+                sma_signal = "HOLD"
+            # Original patterns
+            elif "BUY SIGNAL" in sma_upper or "RECOMMENDATION: BUY" in sma_upper:
+                sma_signal = "BUY"
+            elif "SELL SIGNAL" in sma_upper or "RECOMMENDATION: SELL" in sma_upper:
+                sma_signal = "SELL"
+            elif "HOLD SIGNAL" in sma_upper or "RECOMMENDATION: HOLD" in sma_upper or "NO SIGNAL" in sma_upper:
+                sma_signal = "HOLD"
+
+        # Bounce Hunter
+        if bounce_result and isinstance(bounce_result, str):
+            bounce_upper = bounce_result.upper()
+            # New pattern for Bounce Hunter agent
+            if "THE SIGNAL DETERMINED" in bounce_upper and "IS SELL" in bounce_upper:
+                bounce_signal = "SELL"
+            elif "THE SIGNAL DETERMINED" in bounce_upper and "IS BUY" in bounce_upper:
+                bounce_signal = "BUY"
+            elif "THE SIGNAL DETERMINED" in bounce_upper and "IS HOLD" in bounce_upper or "THE SIGNAL DETERMINED" in bounce_upper and "IS NO SIGNAL" in bounce_upper:
+                bounce_signal = "HOLD"
+            # Original patterns
+            elif "BUY SIGNAL" in bounce_upper or "RECOMMENDATION: BUY" in bounce_upper:
+                bounce_signal = "BUY"
+            elif "SELL SIGNAL" in bounce_upper or "RECOMMENDATION: SELL" in bounce_upper:
+                bounce_signal = "SELL"
+            elif "HOLD SIGNAL" in bounce_upper or "RECOMMENDATION: HOLD" in bounce_upper or "NO SIGNAL" in bounce_upper:
+                bounce_signal = "HOLD"
+
+        # Oracle
+        if oracle_result and isinstance(oracle_result, str):
+            oracle_upper = oracle_result.upper()
+            # Look for explicit final recommendation
+            if "THE SIGNAL DETERMINED FOR" in oracle_upper and "IS SELL" in oracle_upper:
+                oracle_signal = "SELL"
+            elif "THE SIGNAL DETERMINED FOR" in oracle_upper and "IS BUY" in oracle_upper:
+                oracle_signal = "BUY"
+            elif "THE SIGNAL DETERMINED FOR" in oracle_upper and "IS HOLD" in oracle_upper or "THE SIGNAL DETERMINED FOR" in oracle_upper and "IS NO SIGNAL" in oracle_upper:
+                oracle_signal = "HOLD"
+            # Look for signal in quote marks or after "signal:"
+            elif "**SELL**" in oracle_upper or "SIGNAL: **SELL**" in oracle_upper or "SIGNAL IS **SELL**" in oracle_upper:
+                oracle_signal = "SELL"
+            elif "**BUY**" in oracle_upper or "SIGNAL: **BUY**" in oracle_upper or "SIGNAL IS **BUY**" in oracle_upper:
+                oracle_signal = "BUY"
+            elif "**HOLD**" in oracle_upper or "SIGNAL: **HOLD**" in oracle_upper or "SIGNAL IS **HOLD**" in oracle_upper:
+                oracle_signal = "HOLD"
+            # Original patterns but with more context to avoid false positives
+            elif (" BUY SIGNAL" in oracle_upper or "RECOMMENDATION: BUY" in oracle_upper) and not "NOT SATISFY" in oracle_upper and not "NOT MEET" in oracle_upper:
+                oracle_signal = "BUY"
+            elif (" SELL SIGNAL" in oracle_upper or "RECOMMENDATION: SELL" in oracle_upper) and not "NOT SATISFY" in oracle_upper and not "NOT MEET" in oracle_upper:
+                oracle_signal = "SELL"
+            elif (" HOLD SIGNAL" in oracle_upper or "RECOMMENDATION: HOLD" in oracle_upper or " NO SIGNAL" in oracle_upper):
+                oracle_signal = "HOLD"
+            # Final fallback - look for dominant signals
+            elif oracle_upper.count("SELL") > oracle_upper.count("BUY") and oracle_upper.count("SELL") > oracle_upper.count("HOLD"):
+                oracle_signal = "SELL"
+            elif oracle_upper.count("BUY") > oracle_upper.count("SELL") and oracle_upper.count("BUY") > oracle_upper.count("HOLD"):
+                oracle_signal = "BUY"
+            elif oracle_upper.count("HOLD") > oracle_upper.count("SELL") and oracle_upper.count("HOLD") > oracle_upper.count("BUY"):
+                oracle_signal = "HOLD"
+
+        # Momentum
+        if momentum_result and isinstance(momentum_result, str):
+            momentum_upper = momentum_result.upper()
+            # Look for explicit final recommendation
+            if "THE SIGNAL DETERMINED FOR" in momentum_upper and "IS SELL" in momentum_upper:
+                momentum_signal = "SELL"
+            elif "THE SIGNAL DETERMINED FOR" in momentum_upper and "IS BUY" in momentum_upper:
+                momentum_signal = "BUY"
+            elif "THE SIGNAL DETERMINED FOR" in momentum_upper and "IS HOLD" in momentum_upper or "THE SIGNAL DETERMINED FOR" in momentum_upper and "IS NO SIGNAL" in momentum_upper:
+                momentum_signal = "HOLD"
+            # Look for signal at start of analysis
+            elif momentum_upper.strip().startswith("THE HOLD SIGNAL FOR"):
+                momentum_signal = "HOLD"
+            elif momentum_upper.strip().startswith("THE BUY SIGNAL FOR"):
+                momentum_signal = "BUY"
+            elif momentum_upper.strip().startswith("THE SELL SIGNAL FOR"):
+                momentum_signal = "SELL"
+            # Original patterns but with more context to avoid false positives
+            elif (" BUY SIGNAL" in momentum_upper or "RECOMMENDATION: BUY" in momentum_upper) and not "NOT SATISFY" in momentum_upper and not "NOT MEET" in momentum_upper:
+                momentum_signal = "BUY"
+            elif (" SELL SIGNAL" in momentum_upper or "RECOMMENDATION: SELL" in momentum_upper) and not "NOT SATISFY" in momentum_upper and not "NOT MEET" in momentum_upper:
+                momentum_signal = "SELL"
+            elif (" HOLD SIGNAL" in momentum_upper or "RECOMMENDATION: HOLD" in momentum_upper or " NO SIGNAL" in momentum_upper):
+                momentum_signal = "HOLD"
+            # Final fallback - look for dominant signals
+            elif momentum_upper.count("SELL") > momentum_upper.count("BUY") and momentum_upper.count("SELL") > momentum_upper.count("HOLD"):
+                momentum_signal = "SELL"
+            elif momentum_upper.count("BUY") > momentum_upper.count("SELL") and momentum_upper.count("BUY") > momentum_upper.count("HOLD"):
+                momentum_signal = "BUY"
+            elif momentum_upper.count("HOLD") > momentum_upper.count("SELL") and momentum_upper.count("HOLD") > momentum_upper.count("BUY"):
+                momentum_signal = "HOLD"
 
         overall_error = None
         # Report errors if any sub-agents failed or synthesis failed
@@ -490,10 +605,16 @@ async def ask_analysis_manager(req: ManagerRequest):
         # Return the structured response
         return ManagerResponse(
             final_summary=final_summary,
-            sma_analysis=sma_result,      # Include individual result
-            bounce_analysis=bounce_result,  # Include individual result
-            oracle_analysis=oracle_result,  # Include individual result
-            error=overall_error          # Populate error field if relevant
+            final_signal=final_signal,
+            sma_analysis=sma_result,
+            sma_signal=sma_signal,
+            bounce_analysis=bounce_result,
+            bounce_signal=bounce_signal,
+            oracle_analysis=oracle_result,
+            oracle_signal=oracle_signal,
+            momentum_analysis=momentum_result,
+            momentum_signal=momentum_signal,
+            error=overall_error
         )
 
     except Exception as e:

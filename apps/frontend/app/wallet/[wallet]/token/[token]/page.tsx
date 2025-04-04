@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import WalletStatistics from '@/components/WalletStatistics';
 import { ArrowLeftIcon, Loader2, TrendingUpIcon } from 'lucide-react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 import React, { useEffect, useState } from 'react'
 import { AgentOpinions } from '@/components/AgentOpinions';
 import { formatEther } from 'viem';
@@ -21,7 +21,14 @@ if (!Moralis.Core.isStarted) {
 }
 
 const TokenPage = () => {
-    const { wallet, token: tokenAddress } = useParams();
+    // Get route params and query params
+    let { wallet, token: tokenAddress } = useParams();
+    const searchParams = useSearchParams();
+    const urlSymbol = searchParams.get('symbol');
+
+    console.log('Token Address:', tokenAddress);
+    console.log('URL Symbol:', urlSymbol);
+
     const [token, setToken] = useState<Token | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isLoadingAI, setIsLoadingAI] = useState(false);
@@ -34,16 +41,62 @@ const TokenPage = () => {
         error: string | null;
     } | null>(null);
 
-    console.log("symbol", token?.symbol)
-    console.log("name", token?.name)
 
-    useEffect(() => {
-        const fetchTokenData = async () => {
-            if (!wallet || !tokenAddress) return;
+    const fetchTokenData = async () => {
+        if (!wallet) return;
+        
+        try {
+            setIsLoading(true);
 
-            try {
-                setIsLoading(true);
+            // Case 1: Using discover_token_address to lookup by symbol
+            if (tokenAddress === "discover_token_address" && urlSymbol) {
+                // Get all token balances for the wallet
+                const tokenBalances = await Moralis.EvmApi.token.getWalletTokenBalances({
+                    address: wallet as string,
+                    chain: "0xaa36a7", // Sepolia chain ID
+                });
 
+                // Special case for ETH
+                if (urlSymbol.toLowerCase() === "eth") {
+                    const balance = await Moralis.EvmApi.balance.getNativeBalance({
+                        address: wallet as string,
+                        chain: "0xaa36a7", // Sepolia chain ID
+                    });
+
+                    setToken({
+                        id: "0x0000000000000000000000000000000000000000",
+                        symbol: "ETH",
+                        name: "Ethereum",
+                        amount: balance.result.balance.toString(),
+                        value: balance.result.balance.toString(),
+                        address: "0x0000000000000000000000000000000000000000"
+                    });
+                    return;
+                }
+
+                // Filter to find the token with matching symbol
+                const matchingToken = tokenBalances.result.find(
+                    token => token.token?.symbol?.toLowerCase() === urlSymbol.toLowerCase()
+                );
+
+                if (!matchingToken) {
+                    setError(`Token with symbol ${urlSymbol} not found in wallet`);
+                    return;
+                }
+
+                // Set the token data
+                setToken({
+                    id: matchingToken.token?.contractAddress?.toString() || "",
+                    symbol: matchingToken.token?.symbol || "",
+                    name: matchingToken.token?.name || "",
+                    amount: matchingToken.amount.toString(),
+                    value: matchingToken.value,
+                    address: matchingToken.token?.contractAddress?.toString() || ""
+                });
+            } 
+            // Case 2: Using specific token address
+            else if (tokenAddress) {
+                // Native ETH
                 if (tokenAddress === "0x0000000000000000000000000000000000000000") {
                     const balance = await Moralis.EvmApi.balance.getNativeBalance({
                         address: wallet as string,
@@ -59,7 +112,7 @@ const TokenPage = () => {
                         address: "0x0000000000000000000000000000000000000000"
                     });
                 }
-                // Handle ERC20 tokens
+                // ERC20 tokens
                 else {
                     // Get specific token data
                     const tokenData = await Moralis.EvmApi.token.getTokenMetadata({
@@ -90,16 +143,20 @@ const TokenPage = () => {
                         throw new Error("Token not found");
                     }
                 }
-            } catch (err) {
-                console.error("Error fetching token data:", err);
-                setError("Failed to load token data");
-            } finally {
-                setIsLoading(false);
+            } else {
+                setError("Missing token address or symbol");
             }
-        };
+        } catch (err) {
+            console.error("Error fetching token data:", err);
+            setError("Failed to load token data");
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
+    useEffect(() => {
         fetchTokenData();
-    }, [wallet, tokenAddress]);
+    }, [wallet, tokenAddress, urlSymbol]);
 
     const getTokenAIInfo = async () => {
         try {

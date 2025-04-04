@@ -198,7 +198,7 @@ Based on the following data calculated for Token {token_name}:
 - Comparison: {comparison}
 
 Generate a concise explanation for a user. Your explanation should:
-1. State the signal clearly (BUY, SELL, or NO SIGNAL).
+1. Start with "The signal determined for {token_name} is {signal}." - This exact format is critical.
 2. Explain the reasoning based *only* on the provided comparison between the current price and the SMAs.
 3. If the signal is BUY, mention it's generally considered a bullish sign suggesting potential upward momentum according to this strategy.
 4. If the signal is SELL, mention it's generally considered a bearish sign suggesting potential downward momentum according to this strategy.
