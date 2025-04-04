@@ -11,6 +11,7 @@ import { formatEther } from 'viem';
 import { useAccount } from 'wagmi';
 import { Token } from '@/types';
 import Moralis from 'moralis';
+import { axiosInstance } from '@/axios';
 
 // Initialize Moralis outside component
 if (!Moralis.Core.isStarted) {
@@ -21,28 +22,34 @@ if (!Moralis.Core.isStarted) {
 
 const TokenPage = () => {
     const { wallet, token: tokenAddress } = useParams();
-    const { address } = useAccount();
     const [token, setToken] = useState<Token | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [isLoadingAI, setIsLoadingAI] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [tokenAIInfo, setTokenAIInfo] = useState<{
+        final_summary: string;
+        sma_analysis: string;
+        bounce_analysis: string;
+        oracle_analysis: string;
+        error: string | null;
+    } | null>(null);
 
-    console.log(tokenAddress);
+    console.log("symbol", token?.symbol)
+    console.log("name", token?.name)
 
     useEffect(() => {
         const fetchTokenData = async () => {
             if (!wallet || !tokenAddress) return;
-    
+
             try {
                 setIsLoading(true);
-    
-                // Special handling for native ETH
+
                 if (tokenAddress === "0x0000000000000000000000000000000000000000") {
-                    // Get native balance (ETH) for Sepolia
                     const balance = await Moralis.EvmApi.balance.getNativeBalance({
                         address: wallet as string,
                         chain: "0xaa36a7", // Sepolia chain ID
                     });
-    
+
                     setToken({
                         id: "0x0000000000000000000000000000000000000000",
                         symbol: "ETH",
@@ -59,18 +66,18 @@ const TokenPage = () => {
                         addresses: [tokenAddress as string],
                         chain: "0xaa36a7", // Sepolia chain ID
                     });
-    
+
                     // Get token balance
                     const tokenBalances = await Moralis.EvmApi.token.getWalletTokenBalances({
                         address: wallet as string,
                         chain: "0xaa36a7", // Sepolia chain ID
                         tokenAddresses: [tokenAddress as string],
                     });
-    
+
                     if (tokenBalances.result.length > 0 && tokenData.result.length > 0) {
                         const tokenMetadata = tokenData.result[0];
                         const tokenBalance = tokenBalances.result[0];
-    
+
                         setToken({
                             id: tokenAddress as string,
                             symbol: tokenMetadata.token.symbol || "",
@@ -94,21 +101,67 @@ const TokenPage = () => {
         fetchTokenData();
     }, [wallet, tokenAddress]);
 
-    if (isLoading) {
+    const getTokenAIInfo = async () => {
+        try {
+            setIsLoadingAI(true);
+            const res = await axiosInstance.post(`/api/v1/agents/analysis_manager/`, {
+                "token_id": "3306",
+                "token_name": "Ethereum"
+            });
+            setTokenAIInfo(res.data);
+        } catch (error) {
+            console.error("Error fetching token AI info:", error);
+        } finally {
+            setIsLoadingAI(false);
+        }
+    }
+
+    const loadContent = () => {
+        const errorHtml = error ? <div>Error: {error}</div> : null;
+        const loadingHtml = isLoading ? <div>Analyzing...</div> : null;
+        const tokenHtml = !token ? <div>Token not found</div> : null;
+        let content = null;
+
+        if (!error && !isLoading && token) {
+            content = (
+                <>
+                    <div className='py-6'>
+                        <h1 className="text-3xl font-bold mb-2">{token.name} ({token.symbol})</h1>
+                        <p className="text-sm text-gray-500 break-all mb-4">
+                            Contract: {token.address === "0x0000000000000000000000000000000000000000" ? "Native Token" : token.address}
+                        </p>
+                    </div>
+
+                    <div className='py-10 flex flex-col gap-16'>
+                        <WalletStatistics balance={Number(formatEther(BigInt(token.amount)))} />
+                        <Button
+                            onClick={getTokenAIInfo}
+                            className='w-full h-[75px] bg-sky-800 text-lg font-semibold rounded-2xl hover:bg-sky-900'>
+                            <TrendingUpIcon className='w-8 h-8 mr-2 animate-pulse' />
+                            Analyze & Suggest
+                        </Button>
+
+                        {isLoadingAI ? (
+                            <div className="flex flex-col items-center justify-center w-full">
+                                <Loader2 className="w-10 h-10 animate-spin" />
+                                Analyzing...
+                            </div>
+                        ) : (
+                            <AgentOpinions tokenAIInfo={tokenAIInfo} />
+                        )}
+                    </div>
+                </>
+            );
+        }
+
         return (
-            <div className="flex flex-col items-center justify-center h-screen">
-                <Loader2 className="w-10 h-10 animate-spin" />
-                Loading token data...
+            <div>
+                {errorHtml}
+                {loadingHtml}
+                {tokenHtml}
+                {content}
             </div>
         );
-    }
-
-    if (error) {
-        return <div>Error: {error}</div>;
-    }
-
-    if (!token) {
-        return <div>Token not found</div>;
     }
 
     return (
@@ -132,24 +185,8 @@ const TokenPage = () => {
                     </svg>
                     Back to wallet
                 </Link>
-
-                <div className='py-6'>
-                    <h1 className="text-3xl font-bold mb-2">{token.name} ({token.symbol})</h1>
-                    <p className="text-sm text-gray-500 break-all mb-4">
-                        Contract: {token.address === "0x0000000000000000000000000000000000000000" ? "Native Token" : token.address}
-                    </p>
-                </div>
-
-                <div className='py-10 flex flex-col gap-16'>
-                    <WalletStatistics balance={Number(formatEther(BigInt(token.amount)))} />
-                    <Button className='w-full h-[75px] bg-sky-800 text-lg font-semibold rounded-2xl hover:bg-sky-900'>
-                        <TrendingUpIcon className='w-8 h-8 mr-2 animate-pulse' />
-                        Analyze & Suggest
-                    </Button>
-
-                    <AgentOpinions />
-                </div>
             </div>
+            {loadContent()}
         </div>
     )
 }

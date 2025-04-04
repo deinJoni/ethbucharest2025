@@ -1,6 +1,6 @@
 import uvicorn
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.cors import CORSMiddleware
 
 from routes import token_metrics
 from core.config import settings
@@ -12,6 +12,7 @@ app = FastAPI(
     title=settings.PROJECT_NAME,
     description="FastAPI backend for ETH Bucharest 2025",
     version="0.1.0",
+    redirect_slashes=False
 )
 
 # Configure CORS

@@ -5,6 +5,22 @@ import { useEffect, useState } from "react";
 import agentsData from "@/data/agents.json";
 import tokensData from "@/data/tokens.json";
 import Link from "next/link";
+import { Check, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 type Agent = {
   id: string;
@@ -114,13 +130,21 @@ const AgentDetailPage = () => {
   const params = useParams();
   const [agent, setAgent] = useState<Agent | null>(null);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [showDropdown, setShowDropdown] = useState(false);
+  const [openCombobox, setOpenCombobox] = useState(false);
+  const [selectedTokenId, setSelectedTokenId] = useState<string>("");
   const [selectedToken, setSelectedToken] = useState<Token | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>("");
   const [analysisResult, setAnalysisResult] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isInsufficientData, setIsInsufficientData] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+
+  // Filter tokens based on search query
+  const filteredTokens = tokensData.filter(
+    (token) =>
+      token.token_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      token.token_symbol.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   useEffect(() => {
     if (params.agent) {
@@ -137,23 +161,22 @@ const AgentDetailPage = () => {
     setLoading(false);
   }, [params.agent, params.wallet, router]);
 
-  const filteredTokens = tokensData.filter(
-    (token) =>
-      token.token_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      token.token_symbol.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const handleTokenSelect = (token: Token) => {
-    setSelectedToken(token);
-    setSearchTerm("");
-    setShowDropdown(false);
-  };
+  // Update selected token when token ID changes
+  useEffect(() => {
+    if (selectedTokenId) {
+      const tokenIdNum = parseInt(selectedTokenId);
+      const token = tokensData.find((t) => t.token_id === tokenIdNum) || null;
+      setSelectedToken(token);
+    } else {
+      setSelectedToken(null);
+    }
+  }, [selectedTokenId]);
 
   const analyzeToken = async () => {
     if (selectedToken && agent) {
       try {
         setIsAnalyzing(true);
-        setAnalysisResult("Analyzing token...");
+        setAnalysisResult(null);
         setIsInsufficientData(false);
         setErrorMessage("");
 
@@ -179,27 +202,32 @@ const AgentDetailPage = () => {
           body: JSON.stringify(payload),
         });
 
-        if (!response.ok) {
-          throw new Error(`API responded with status: ${response.status}`);
-        }
-
-        // Parse and display the response
+        // Parse the response
         const data = await response.json();
 
-        // Check for insufficient data error
-        if (data.error && data.error.includes("Insufficient data")) {
-          setIsInsufficientData(true);
-          setErrorMessage(data.error);
-          setAnalysisResult(null);
+        // Check if there's an error field in the response
+        if (data.error) {
+          // Extract just the main error message without all the technical details
+          const errorMsg = data.error;
+          const cleanedError = errorMsg.includes(":")
+            ? errorMsg.split(":")[0] // Take just the first part before the colon
+            : errorMsg;
+
+          if (errorMsg.includes("Insufficient data")) {
+            setIsInsufficientData(true);
+            setErrorMessage(errorMsg);
+          } else {
+            setErrorMessage(cleanedError);
+          }
+        } else if (!response.ok) {
+          throw new Error(`API responded with status: ${response.status}`);
         } else {
           setAnalysisResult(data.analysis || JSON.stringify(data, null, 2));
         }
       } catch (error) {
         console.error("Error analyzing token:", error);
-        setAnalysisResult(
-          `Error analyzing token: ${
-            error instanceof Error ? error.message : "Unknown error"
-          }`
+        setErrorMessage(
+          error instanceof Error ? error.message : "Unknown error occurred"
         );
       } finally {
         setIsAnalyzing(false);
@@ -307,50 +335,75 @@ const AgentDetailPage = () => {
           <div className="mb-8 p-5 border border-gray-200 rounded-lg bg-gray-50">
             <h2 className="text-2xl font-semibold mb-4">Token Analysis</h2>
 
-            <div className="flex flex-col md:flex-row gap-3 mb-4">
-              <div className="relative flex-1">
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => {
-                    setSearchTerm(e.target.value);
-                    setShowDropdown(true);
-                  }}
-                  onFocus={() => setShowDropdown(true)}
-                  placeholder="Search for a token..."
-                  className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-
-                {showDropdown && searchTerm && (
-                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
-                    {filteredTokens.length > 0 ? (
-                      filteredTokens.slice(0, 10).map((token) => (
-                        <div
-                          key={token.token_id}
-                          onClick={() => handleTokenSelect(token)}
-                          className="p-3 hover:bg-gray-100 cursor-pointer border-b border-gray-100"
-                        >
-                          <div className="font-medium">{token.token_name}</div>
-                          <div className="text-sm text-gray-600">
-                            {token.token_symbol}
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="p-3 text-gray-500">No tokens found</div>
-                    )}
-                  </div>
-                )}
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex-1">
+                <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={openCombobox}
+                      className="w-full justify-between h-11"
+                    >
+                      {selectedToken
+                        ? `${selectedToken.token_name} (${selectedToken.token_symbol})`
+                        : "Search for a token..."}
+                      <ChevronsUpDown className="opacity-50 ml-2 h-4 w-4" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-full p-0" align="start">
+                    <Command shouldFilter={false}>
+                      <CommandInput
+                        placeholder="Search tokens..."
+                        className="h-9"
+                        value={searchQuery}
+                        onValueChange={setSearchQuery}
+                      />
+                      <CommandList>
+                        <CommandEmpty>No tokens found.</CommandEmpty>
+                        <CommandGroup>
+                          {filteredTokens.slice(0, 50).map((token) => (
+                            <CommandItem
+                              key={token.token_id}
+                              value={token.token_id.toString()}
+                              onSelect={(value) => {
+                                setSelectedTokenId(
+                                  value === selectedTokenId ? "" : value
+                                );
+                                setOpenCombobox(false);
+                              }}
+                            >
+                              <div className="flex flex-col">
+                                <span>{token.token_name}</span>
+                                <span className="text-sm text-gray-500">
+                                  {token.token_symbol}
+                                </span>
+                              </div>
+                              <Check
+                                className={cn(
+                                  "ml-auto",
+                                  selectedTokenId === token.token_id.toString()
+                                    ? "opacity-100"
+                                    : "opacity-0"
+                                )}
+                              />
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
 
               <button
                 onClick={analyzeToken}
                 disabled={!selectedToken || isAnalyzing}
-                className={`px-4 py-3 rounded-md ${
+                className={`px-4 h-11 rounded-md ${
                   selectedToken && !isAnalyzing
                     ? "bg-blue-600 text-white hover:bg-blue-700"
                     : "bg-gray-300 text-gray-500 cursor-not-allowed"
-                } transition-colors flex items-center justify-center`}
+                } transition-colors flex items-center justify-center whitespace-nowrap`}
               >
                 {isAnalyzing ? (
                   <>
@@ -399,7 +452,27 @@ const AgentDetailPage = () => {
               />
             )}
 
-            {analysisResult && !isInsufficientData && (
+            {errorMessage && !isInsufficientData && (
+              <div className="mt-4 p-4 border border-red-200 rounded-md bg-red-50">
+                <div className="flex items-center text-red-800">
+                  <svg
+                    className="h-5 w-5 mr-2"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  <h3 className="font-medium text-lg">Error</h3>
+                </div>
+                <p className="mt-2 ml-7 text-red-700">{errorMessage}</p>
+              </div>
+            )}
+
+            {analysisResult && !isInsufficientData && !errorMessage && (
               <div className="mt-4 p-4 border border-blue-200 rounded-md bg-blue-50">
                 <h3 className="font-medium text-lg mb-2">Analysis Result</h3>
                 <p className="whitespace-pre-wrap">{analysisResult}</p>
@@ -439,8 +512,7 @@ const AgentDetailPage = () => {
                   </li>
                 ))}
               </ul>
-            </div>
-          </div> */}
+            </div> */}
         </div>
       </div>
     </div>
