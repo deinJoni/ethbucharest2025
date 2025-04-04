@@ -63,10 +63,10 @@ const StatBar = ({ label, value }: { label: string; value: number }) => {
         <div
           className={`h-2.5 rounded-full ${
             label === "Patience"
-              ? "bg-blue-600"
+              ? "bg-sky-600"
               : label === "Aggressiveness"
-              ? "bg-red-600"
-              : "bg-green-600"
+              ? "bg-rose-600"
+              : "bg-teal-600"
           }`}
           style={{ width: `${value}%` }}
         ></div>
