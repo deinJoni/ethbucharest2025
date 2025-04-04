@@ -40,39 +40,77 @@ def bounce_hunter_analysis(token_id: str, symbol: str) -> str:
         symbol_cleaned = symbol.strip().upper()
         logger.info(f"Starting bounce hunter analysis for symbol: '{symbol_cleaned}' (using token_id: {token_id})")
 
-        # --- Placeholder Data ---
-        # TODO: Fetch current price from OHLCV endpoint or other real-time source
-        current_price = 2950.00 # Dummy data for ETH
-        # --- End Placeholder Data ---
-
-        # --- Fetch Historical Levels from Token Metrics API ---
+        # --- Fetch API Key ---
         api_key = settings.TOKEN_METRICS_API_KEY
         if not api_key or api_key == "YOUR_TOKEN_METRICS_API_KEY": # Basic check
              logger.error("Token Metrics API key not configured.")
-             # Use cleaned symbol in error message
              return f"Failed to analyze {symbol_cleaned}: Token Metrics API key missing."
 
-        # Use the provided token_id directly, no mapping needed
-        # Use cleaned symbol for the 'symbol' parameter in the URL
-        url = f"https://api.tokenmetrics.com/v2/resistance-support?token_id={token_id}&limit=100&page=0"
         headers = {
             "accept": "application/json",
             "api_key": api_key
         }
 
+        # --- Fetch Current Price from Token Metrics API ---
+        current_price = None
+        price_url = f"https://api.tokenmetrics.com/v2/price?token_id={token_id}"
+        try:
+            logger.info(f"Fetching current price for {symbol_cleaned} (ID: {token_id}) from {price_url}")
+            price_response = requests.get(price_url, headers=headers, timeout=10)
+            price_response.raise_for_status()
+            price_data = price_response.json()
+
+            if price_data.get("success") and price_data.get("data"):
+                if price_data["data"]:
+                    # Assuming the first item in the data list corresponds to the token_id
+                    token_price_info = price_data["data"][0]
+                    if token_price_info.get("TOKEN_ID") == int(token_id): # Verify token ID match
+                        current_price = token_price_info.get("CURRENT_PRICE")
+                        if current_price is not None:
+                            current_price = float(current_price) # Ensure it's a float
+                            logger.info(f"Successfully fetched current price for {symbol_cleaned} (ID: {token_id}): {current_price}")
+                        else:
+                            logger.error(f"CURRENT_PRICE field missing in Token Metrics price response for {symbol_cleaned} (ID: {token_id}).")
+                    else:
+                        logger.error(f"Token ID mismatch in price response. Expected {token_id}, got {token_price_info.get('TOKEN_ID')}")
+                else:
+                     logger.error(f"Token Metrics price response data list is empty for {symbol_cleaned} (ID: {token_id}).")
+            else:
+                logger.error(f"Token Metrics price API call failed or returned no data for {symbol_cleaned} (ID: {token_id}). Message: {price_data.get('message')}")
+
+        except requests.exceptions.RequestException as e:
+            logger.exception(f"Error fetching current price from Token Metrics for {symbol_cleaned} (ID: {token_id}): {e}")
+            # Decide how to handle price fetch failure: return error or continue without price? Returning error is safer.
+            return f"Failed to analyze {symbol_cleaned}: Could not fetch current price from Token Metrics ({type(e).__name__})."
+        except (ValueError, KeyError, TypeError) as e: # Handle JSON parsing, key errors, or type conversion issues
+             logger.exception(f"Error processing Token Metrics price response for {symbol_cleaned} (ID: {token_id}): {e}")
+             return f"Failed to analyze {symbol_cleaned}: Invalid price data format received from Token Metrics ({type(e).__name__})."
+
+        # Check if current_price was successfully obtained before proceeding
+        if current_price is None:
+            # If price fetch failed for any reason noted above, return an error message.
+            return f"Failed to analyze {symbol_cleaned}: Could not determine current price from Token Metrics."
+
+        # --- Fetch Historical Levels from Token Metrics API ---
+        # Use the provided token_id directly, no mapping needed
+        # Use cleaned symbol for the 'symbol' parameter in the URL (though maybe not needed if endpoint ignores it?)
+        levels_url = f"https://api.tokenmetrics.com/v2/resistance-support?token_id={token_id}&limit=100&page=0"
+        # headers are already defined above
+
         historical_levels = []
         try:
-            response = requests.get(url, headers=headers, timeout=10) # Added timeout
-            print(f"Response: {response}")
-            response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
-            response_data = response.json()
-            print(f"Response Data: {response_data}")
+            logger.info(f"Fetching historical levels for {symbol_cleaned} (ID: {token_id}) from {levels_url}")
+            levels_response = requests.get(levels_url, headers=headers, timeout=10) # Added timeout
+            # print(f"Response: {levels_response}") # Debug print
+            levels_response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
+            levels_response_data = levels_response.json()
+            # print(f"Response Data: {levels_response_data}") # Debug print
 
-            if response_data.get("success") and response_data.get("data"):
+            if levels_response_data.get("success") and levels_response_data.get("data"):
                 # Since we query by token_id, the list should contain only our token.
                 # Take the first item directly instead of filtering by symbol.
-                if response_data["data"]:
-                    token_data = response_data["data"][0]
+                if levels_response_data["data"]:
+                    token_data = levels_response_data["data"][0]
                     # Optional: Verify the symbol if needed, though filtering is removed.
                     # actual_symbol = token_data.get("TOKEN_SYMBOL")
                     # if actual_symbol != symbol_cleaned:
@@ -86,8 +124,8 @@ def bounce_hunter_analysis(token_id: str, symbol: str) -> str:
                     logger.warning(f"Token Metrics response indicated success but data list was empty for {symbol_cleaned} (ID: {token_id}).")
                     token_data = None # Ensure token_data is None
             else:
-                logger.error(f"Token Metrics API call failed or returned no data for {symbol_cleaned} (ID: {token_id}). Message: {response_data.get('message')}")
-                return f"Failed to fetch data for {symbol_cleaned} from Token Metrics: {response_data.get('message', 'Unknown API error')}"
+                logger.error(f"Token Metrics API call failed or returned no data for {symbol_cleaned} (ID: {token_id}). Message: {levels_response_data.get('message')}")
+                return f"Failed to fetch data for {symbol_cleaned} from Token Metrics: {levels_response_data.get('message', 'Unknown API error')}"
 
         except requests.exceptions.RequestException as e:
             logger.exception(f"Error fetching data from Token Metrics for {symbol_cleaned} (ID: {token_id}): {e}")
@@ -99,35 +137,41 @@ def bounce_hunter_analysis(token_id: str, symbol: str) -> str:
 
         # Check if historical_levels were successfully populated (token_data was found and valid)
         if not historical_levels:
-            # The warning about "No data found for symbol..." is removed as we don't filter by symbol now
-            # If levels list is empty, it means either token_data was None or HISTORICAL_RESISTANCE_SUPPORT_LEVELS was missing/empty
             logger.warning(f"Could not extract historical levels for {symbol_cleaned} (ID: {token_id}) from Token Metrics response.")
-            return f"{symbol_cleaned}: No historical support/resistance levels found or extracted via Token Metrics."
+            # Return HOLD if no levels are found
+            return f"Decision: HOLD — Reason: No historical support/resistance levels found or extracted for {symbol_cleaned} (ID: {token_id}) via Token Metrics."
 
-        nearby_signals = []
+        # --- Decision Logic ---
+        decision = "HOLD" # Default decision
+        reason = f"Price (${current_price:.2f}) is not within {PROXIMITY_THRESHOLD:.1%} of any known historical support/resistance levels."
+
+        # Sort levels by proximity to potentially prioritize the closest?
+        # Or just take the first signal found? Let's take the first signal for now.
         for level_data in historical_levels:
             level = level_data["level"]
             level_date = level_data["date"]
             price_diff = abs(current_price - level)
-            proximity_percent = (price_diff / level) if level != 0 else 0
+            proximity_percent = (price_diff / level) if level != 0 else float('inf') # Avoid division by zero
 
             if proximity_percent <= PROXIMITY_THRESHOLD:
                 distance_str = f"${price_diff:.2f} ({proximity_percent:.2%})"
                 if current_price > level:
-                    signal = "Bounce Watch"
-                    signal_desc = f"{signal} (Price above support {level:.2f} from {level_date}, Distance: {distance_str})"
+                    # Price is above a nearby level (Support) -> BUY signal
+                    decision = "BUY"
+                    reason = f"Price (${current_price:.2f}) is within {proximity_percent:.2%} above support level {level:.2f} (from {level_date}). Expecting a bounce."
+                    logger.info(f"BUY signal triggered for {symbol_cleaned} near support level {level:.2f}")
+                    break # Stop after finding the first significant level signal
                 else: # current_price <= level
-                    signal = "Breakout Watch"
-                    signal_desc = f"{signal} (Price below resistance {level:.2f} from {level_date}, Distance: {distance_str})"
-                nearby_signals.append(signal_desc)
+                    # Price is below a nearby level (Resistance) -> SELL signal
+                    decision = "SELL"
+                    reason = f"Price (${current_price:.2f}) is within {proximity_percent:.2%} below resistance level {level:.2f} (from {level_date}). Expecting rejection."
+                    logger.info(f"SELL signal triggered for {symbol_cleaned} near resistance level {level:.2f}")
+                    break # Stop after finding the first significant level signal
 
-        if not nearby_signals:
-            result = f"{symbol_cleaned}: Current Price=${current_price:.2f}. No nearby key levels within {PROXIMITY_THRESHOLD:.1%} — no signal."
-        else:
-            signals_formatted = "\n".join(f"- {s}" for s in nearby_signals)
-            result = f"{symbol_cleaned}: Current Price=${current_price:.2f}.\nNearby Key Levels & Signals:\n{signals_formatted}"
+        # Format the final output
+        result = f"Decision: {decision} — Reason: {reason}"
 
-        logger.info(f"Bounce hunter analysis result for {symbol_cleaned}: {result}")
+        logger.info(f"Bounce hunter analysis result for {symbol_cleaned} (ID: {token_id}): {result}")
         return result
 
     except Exception as e:
