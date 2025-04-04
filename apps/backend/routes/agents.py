@@ -531,37 +531,65 @@ async def ask_analysis_manager(req: ManagerRequest):
         # Oracle
         if oracle_result and isinstance(oracle_result, str):
             oracle_upper = oracle_result.upper()
-            # New pattern for Oracle agent
-            if "THE SIGNAL DETERMINED" in oracle_upper and "IS SELL" in oracle_upper:
+            # Look for explicit final recommendation
+            if "THE SIGNAL DETERMINED FOR" in oracle_upper and "IS SELL" in oracle_upper:
                 oracle_signal = "SELL"
-            elif "THE SIGNAL DETERMINED" in oracle_upper and "IS BUY" in oracle_upper:
+            elif "THE SIGNAL DETERMINED FOR" in oracle_upper and "IS BUY" in oracle_upper:
                 oracle_signal = "BUY"
-            elif "THE SIGNAL DETERMINED" in oracle_upper and "IS HOLD" in oracle_upper or "THE SIGNAL DETERMINED" in oracle_upper and "IS NO SIGNAL" in oracle_upper:
+            elif "THE SIGNAL DETERMINED FOR" in oracle_upper and "IS HOLD" in oracle_upper or "THE SIGNAL DETERMINED FOR" in oracle_upper and "IS NO SIGNAL" in oracle_upper:
                 oracle_signal = "HOLD"
-            # Original patterns
-            elif "BUY SIGNAL" in oracle_upper or "RECOMMENDATION: BUY" in oracle_upper:
-                oracle_signal = "BUY"
-            elif "SELL SIGNAL" in oracle_upper or "RECOMMENDATION: SELL" in oracle_upper:
+            # Look for signal in quote marks or after "signal:"
+            elif "**SELL**" in oracle_upper or "SIGNAL: **SELL**" in oracle_upper or "SIGNAL IS **SELL**" in oracle_upper:
                 oracle_signal = "SELL"
-            elif "HOLD SIGNAL" in oracle_upper or "RECOMMENDATION: HOLD" in oracle_upper or "NO SIGNAL" in oracle_upper:
+            elif "**BUY**" in oracle_upper or "SIGNAL: **BUY**" in oracle_upper or "SIGNAL IS **BUY**" in oracle_upper:
+                oracle_signal = "BUY"
+            elif "**HOLD**" in oracle_upper or "SIGNAL: **HOLD**" in oracle_upper or "SIGNAL IS **HOLD**" in oracle_upper:
+                oracle_signal = "HOLD"
+            # Original patterns but with more context to avoid false positives
+            elif (" BUY SIGNAL" in oracle_upper or "RECOMMENDATION: BUY" in oracle_upper) and not "NOT SATISFY" in oracle_upper and not "NOT MEET" in oracle_upper:
+                oracle_signal = "BUY"
+            elif (" SELL SIGNAL" in oracle_upper or "RECOMMENDATION: SELL" in oracle_upper) and not "NOT SATISFY" in oracle_upper and not "NOT MEET" in oracle_upper:
+                oracle_signal = "SELL"
+            elif (" HOLD SIGNAL" in oracle_upper or "RECOMMENDATION: HOLD" in oracle_upper or " NO SIGNAL" in oracle_upper):
+                oracle_signal = "HOLD"
+            # Final fallback - look for dominant signals
+            elif oracle_upper.count("SELL") > oracle_upper.count("BUY") and oracle_upper.count("SELL") > oracle_upper.count("HOLD"):
+                oracle_signal = "SELL"
+            elif oracle_upper.count("BUY") > oracle_upper.count("SELL") and oracle_upper.count("BUY") > oracle_upper.count("HOLD"):
+                oracle_signal = "BUY"
+            elif oracle_upper.count("HOLD") > oracle_upper.count("SELL") and oracle_upper.count("HOLD") > oracle_upper.count("BUY"):
                 oracle_signal = "HOLD"
 
         # Momentum
         if momentum_result and isinstance(momentum_result, str):
             momentum_upper = momentum_result.upper()
-            # New pattern for Momentum agent
-            if "THE SIGNAL DETERMINED" in momentum_upper and "IS SELL" in momentum_upper:
+            # Look for explicit final recommendation
+            if "THE SIGNAL DETERMINED FOR" in momentum_upper and "IS SELL" in momentum_upper:
                 momentum_signal = "SELL"
-            elif "THE SIGNAL DETERMINED" in momentum_upper and "IS BUY" in momentum_upper:
+            elif "THE SIGNAL DETERMINED FOR" in momentum_upper and "IS BUY" in momentum_upper:
                 momentum_signal = "BUY"
-            elif "THE SIGNAL DETERMINED" in momentum_upper and "IS HOLD" in momentum_upper or "THE SIGNAL DETERMINED" in momentum_upper and "IS NO SIGNAL" in momentum_upper:
+            elif "THE SIGNAL DETERMINED FOR" in momentum_upper and "IS HOLD" in momentum_upper or "THE SIGNAL DETERMINED FOR" in momentum_upper and "IS NO SIGNAL" in momentum_upper:
                 momentum_signal = "HOLD"
-            # Original patterns
-            elif "BUY SIGNAL" in momentum_upper or "RECOMMENDATION: BUY" in momentum_upper:
+            # Look for signal at start of analysis
+            elif momentum_upper.strip().startswith("THE HOLD SIGNAL FOR"):
+                momentum_signal = "HOLD"
+            elif momentum_upper.strip().startswith("THE BUY SIGNAL FOR"):
                 momentum_signal = "BUY"
-            elif "SELL SIGNAL" in momentum_upper or "RECOMMENDATION: SELL" in momentum_upper:
+            elif momentum_upper.strip().startswith("THE SELL SIGNAL FOR"):
                 momentum_signal = "SELL"
-            elif "HOLD SIGNAL" in momentum_upper or "RECOMMENDATION: HOLD" in momentum_upper or "NO SIGNAL" in momentum_upper:
+            # Original patterns but with more context to avoid false positives
+            elif (" BUY SIGNAL" in momentum_upper or "RECOMMENDATION: BUY" in momentum_upper) and not "NOT SATISFY" in momentum_upper and not "NOT MEET" in momentum_upper:
+                momentum_signal = "BUY"
+            elif (" SELL SIGNAL" in momentum_upper or "RECOMMENDATION: SELL" in momentum_upper) and not "NOT SATISFY" in momentum_upper and not "NOT MEET" in momentum_upper:
+                momentum_signal = "SELL"
+            elif (" HOLD SIGNAL" in momentum_upper or "RECOMMENDATION: HOLD" in momentum_upper or " NO SIGNAL" in momentum_upper):
+                momentum_signal = "HOLD"
+            # Final fallback - look for dominant signals
+            elif momentum_upper.count("SELL") > momentum_upper.count("BUY") and momentum_upper.count("SELL") > momentum_upper.count("HOLD"):
+                momentum_signal = "SELL"
+            elif momentum_upper.count("BUY") > momentum_upper.count("SELL") and momentum_upper.count("BUY") > momentum_upper.count("HOLD"):
+                momentum_signal = "BUY"
+            elif momentum_upper.count("HOLD") > momentum_upper.count("SELL") and momentum_upper.count("HOLD") > momentum_upper.count("BUY"):
                 momentum_signal = "HOLD"
 
         overall_error = None

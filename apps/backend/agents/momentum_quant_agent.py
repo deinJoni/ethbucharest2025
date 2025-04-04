@@ -260,7 +260,12 @@ momentum_reasoning_prompt = PromptTemplate.from_template(
 
     **Explanation:**
 
-    Please rephrase the calculated reason into a concise, user-friendly explanation for why the signal is {signal}. Stick strictly to the provided reason and metrics. Mention the thresholds involved ({momentum_threshold:.1%}, {quant_grade_threshold}). Maintain a professional and objective tone.
+    Start your explanation with "The signal determined for {token_name} is {signal}." - This exact format is critical.
+    
+    Then rephrase the calculated reason into a concise, user-friendly explanation for why the signal is {signal}. Stick strictly to the provided reason and metrics. Mention the thresholds involved ({momentum_threshold:.1%}, {quant_grade_threshold}). Maintain a professional and objective tone.
+    
+    Before concluding, restate the final signal recommendation in this exact format:
+    "FINAL RECOMMENDATION: {signal}"
     """
 )
 
