@@ -10,6 +10,7 @@ from agents.sma_agent import app as crypto_graph_app
 from agents.bounce_hunter import app as bounce_hunter_graph_app
 from agents.crypto_oracle import app as crypto_oracle_app
 from agents.manager_agent import app as manager_agent_app # Import the new manager app
+from agents.momentum_quant_agent import app as momentum_quant_app # Import the new momentum quant agent
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -50,6 +51,18 @@ class OracleResponse(BaseModel):
     analysis: str | None = None
     error: str | None = None
     steps: List[Dict[str, Any]] | None = None
+
+# --- New Models for Momentum Quant Agent ---
+class MomentumQuantRequest(BaseModel):
+    token_id: str # Only requires token_id
+    token_name: Optional[str] = None # Add optional token_name
+
+# Updated response model to include LLM reasoning
+class MomentumQuantResponse(BaseModel):
+    signal: Optional[str] = None # BUY, SELL, HOLD (from analysis_data)
+    llm_reasoning: Optional[str] = None # Detailed explanation
+    error: Optional[str] = None
+    steps: Optional[List[Dict[str, Any]]] = None
 
 # --- New Models for Manager Agent ---
 class ManagerRequest(BaseModel):
@@ -297,6 +310,108 @@ async def ask_crypto_oracle_agent(req: OracleRequest):
     except Exception as e:
         logger.exception("Unhandled error processing crypto_oracle_agent request")
         return OracleResponse(analysis=None, error=f"An unexpected server error occurred: {str(e)}", steps=None)
+
+# --- New Endpoint for Momentum Quant Agent ---
+@router.post("/momentum_quant_agent/", response_model=MomentumQuantResponse)
+@router.post("/momentum_quant_agent", response_model=MomentumQuantResponse)
+async def ask_momentum_quant_agent(req: MomentumQuantRequest):
+    """
+    Runs the Momentum Quant agent, which analyzes momentum and quant grade,
+    and generates a detailed explanation.
+    """
+    # Include token_name in the input dict if provided
+    input_data = {
+        "token_id": req.token_id,
+        "token_name": req.token_name or f"Token ID {req.token_id}" # Use ID as fallback name
+    }
+    logger.info(f"Received request for token_id: {req.token_id}, token_name: {req.token_name}")
+
+    try:
+        config = {"configurable": {"thread_id": str(uuid4())}}
+        # Pass the full input_data dictionary to the agent
+        logger.info(f"Invoking momentum_quant_agent graph with input: {input_data}")
+        final_state = momentum_quant_app.invoke({"input": input_data}, config=config)
+        logger.info(f"Momentum Quant graph final state: {final_state}")
+
+        # --- Extract results from the new state structure --- #
+        analysis_data = final_state.get("analysis_data")
+        llm_reasoning = final_state.get("llm_reasoning")
+        intermediate_steps = final_state.get("intermediate_steps", [])
+
+        overall_error = None
+        signal = None
+
+        if isinstance(analysis_data, dict):
+            signal = analysis_data.get("signal") # Extract signal from dict
+            if analysis_data.get("error"):
+                # Error reported by the tool/calculation step
+                overall_error = analysis_data.get("reason_string") or analysis_data.get("error")
+                logger.warning(f"Momentum Quant analysis reported an error: {overall_error}")
+
+        # Check if LLM reasoning itself indicates an error (e.g., LLM call failed)
+        if isinstance(llm_reasoning, str) and llm_reasoning.startswith("Analysis Error"):
+             overall_error = llm_reasoning # Prioritize LLM/graph error message
+             logger.warning(f"Momentum Quant LLM reasoning reported an error: {overall_error}")
+        elif llm_reasoning is None and overall_error is None:
+             # If no error reported yet, but LLM is missing, flag it
+             overall_error = "Error: LLM reasoning was not generated."
+             logger.error(overall_error)
+
+        # --- Format Steps (Updated for dictionary observation) --- #
+        formatted_steps = []
+        step_count = 1
+        # intermediate_steps is List[Tuple[AgentAction, Dict]]
+        if intermediate_steps:
+            for action, observation_dict in intermediate_steps:
+                step_info = {
+                    "step": step_count,
+                    "description": "Executing momentum quant analysis tool",
+                    "observation": observation_dict # The result dictionary
+                }
+                if isinstance(action, AgentAction):
+                    step_info["action"] = getattr(action, 'tool', 'unknown_tool')
+                    step_info["action_input"] = getattr(action, 'tool_input', 'unknown_input')
+                else:
+                    # Handle cases like the dummy error action
+                    step_info["description"] = "Graph execution step (potential error)"
+                    step_info["raw_action"] = action
+
+                formatted_steps.append(step_info)
+                step_count += 1
+
+        # Step for LLM generation (if successful)
+        if llm_reasoning and not overall_error:
+             formatted_steps.append({
+                "step": step_count,
+                "description": "Generating final explanation (LLM)",
+                "llm_output": llm_reasoning
+             })
+        elif overall_error:
+             # If there was an error, add a step indicating LLM was skipped or failed
+             formatted_steps.append({
+                 "step": step_count,
+                 "description": "LLM Reasoning Step",
+                 "status": "Skipped or Failed due to Error",
+                 "error_details": overall_error
+             })
+
+        # --- End Format Steps --- #
+
+        return MomentumQuantResponse(
+            signal=signal, # Return signal from analysis_data
+            llm_reasoning=llm_reasoning, # Return LLM explanation
+            error=overall_error, # Return overall error if any
+            steps=formatted_steps
+        )
+
+    except Exception as e:
+        logger.exception("Unhandled error processing momentum_quant_agent request")
+        return MomentumQuantResponse(
+            signal=None,
+            llm_reasoning=None,
+            error=f"An unexpected server error occurred: {type(e).__name__} - {str(e)}",
+            steps=None
+        )
 
 # --- New Endpoint for Manager Agent ---
 @router.post("/analysis_manager/", response_model=ManagerResponse)
