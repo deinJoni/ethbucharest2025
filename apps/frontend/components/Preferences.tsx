@@ -13,6 +13,7 @@ import {
 import { RadioGroup, RadioGroupItem } from "./ui/radio-group";
 import { Label } from "./ui/label";
 import { Button } from "./ui/button";
+import { Input } from "./ui/input";
 
 const riskProfiles = [
   {
@@ -48,6 +49,8 @@ const Preferences = ({ address }: { address: string }) => {
   >("BALANCED");
   const [selectedProfileId, setSelectedProfileId] = useState<number>(2);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [name, setName] = useState("");
+  const [nameError, setNameError] = useState(false);
 
   const updatePreferences = async () => {
     try {
@@ -63,7 +66,7 @@ const Preferences = ({ address }: { address: string }) => {
           },
         }
       );
-      if (!res.data.risk_profile) {
+      if (!res.data.risk_profile || !res.data.name) {
         setOpen(true);
       }
     } catch (error) {
@@ -72,14 +75,20 @@ const Preferences = ({ address }: { address: string }) => {
   };
 
   const handleSubmit = async () => {
+    if (!name.trim()) {
+      setNameError(true);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      console.log("Submitting preferences:", riskProfile);
+      console.log("Submitting preferences:", riskProfile, "Name:", name);
       const res = await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/wallets`,
         {
           address: address,
           risk_profile: riskProfile,
+          name: name || "Anonymous",
         },
         {
           headers: {
@@ -97,6 +106,10 @@ const Preferences = ({ address }: { address: string }) => {
   };
 
   const handleSkip = async () => {
+    // When skipping, we don't need name validation
+    // Reset name error if it was previously set
+    setNameError(false);
+
     setIsSubmitting(true);
     try {
       // Default to SAFE risk profile when skipping
@@ -108,6 +121,7 @@ const Preferences = ({ address }: { address: string }) => {
         {
           address: address,
           risk_profile: safeRiskProfile,
+          name: "Anonymous", // Always use "Anonymous" when skipping
         },
         {
           headers: {
@@ -128,6 +142,13 @@ const Preferences = ({ address }: { address: string }) => {
     updatePreferences();
   }, []);
 
+  // Clear name error when user types
+  useEffect(() => {
+    if (name.trim() && nameError) {
+      setNameError(false);
+    }
+  }, [name]);
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="sm:max-w-md md:max-w-xl p-6">
@@ -141,6 +162,26 @@ const Preferences = ({ address }: { address: string }) => {
         </DialogHeader>
 
         <div className="py-4">
+          <div className="mb-6">
+            <Label htmlFor="name" className="text-sm font-medium mb-2 block">
+              Your Name
+            </Label>
+            <Input
+              id="name"
+              placeholder="Anonymous"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className={`w-full ${
+                nameError ? "border-red-500 focus-visible:ring-red-500" : ""
+              }`}
+            />
+            {nameError && (
+              <p className="text-red-500 text-sm mt-1">
+                Please enter your name
+              </p>
+            )}
+          </div>
+
           <RadioGroup
             value={selectedProfileId.toString()}
             onValueChange={(val) => {
@@ -280,7 +321,7 @@ const Preferences = ({ address }: { address: string }) => {
           <Button
             onClick={handleSubmit}
             className="w-full sm:w-auto"
-            disabled={isSubmitting}
+            disabled={isSubmitting || !name.trim()}
           >
             {isSubmitting ? "Saving..." : "Save Preferences"}
           </Button>

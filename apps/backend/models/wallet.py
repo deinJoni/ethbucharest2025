@@ -23,11 +23,13 @@ class Wallet(Base):
     __tablename__ = "wallets"
     
     address = Column(String, primary_key=True, index=True)
+    name = Column(String, nullable=True)
     risk_profile = Column(Enum(RiskProfile), nullable=True)
 
 # Pydantic models for request/response handling
 class WalletBase(BaseModel):
     address: str
+    name: Optional[str] = None
     risk_profile: Optional[RiskProfile] = None
     
 class WalletCreate(WalletBase):
