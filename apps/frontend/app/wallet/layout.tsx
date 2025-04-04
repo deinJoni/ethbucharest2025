@@ -12,7 +12,7 @@ const layout = ({ children }: { children: React.ReactNode }) => {
                     backgroundImage: `url('/landing-left-bg.jpg')`
                 }}
             >   
-                <div className="w-full h-screen fixed">
+                <div className="w-1/4 h-screen fixed">
                     {/* Our logo in top left */}
                     <div className="absolute top-8 left-8 flex flex-col items-left">
                         <Image
@@ -80,7 +80,7 @@ const layout = ({ children }: { children: React.ReactNode }) => {
             </div>
 
             {/* Scrollable content area with padding to account for fixed sidebar */}
-            <div className=" w-3/4 min-h-screen">
+            <div className=" w-3/4 min-h-screen z-20">
                 <div className="px-10 py-4 w-full">
                     <Navbar />
                     {children}
