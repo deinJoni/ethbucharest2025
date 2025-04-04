@@ -58,7 +58,7 @@ const Preferences = ({ address }: { address: string }) => {
   const updatePreferences = async () => {
     try {
       const res = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL}/wallets`,
+        `${process.env.NEXT_PUBLIC_API_URL}/wallets/`,
         {
           address: address,
         },
@@ -91,7 +91,7 @@ const Preferences = ({ address }: { address: string }) => {
     try {
       console.log("Submitting preferences:", riskProfile, "Name:", name);
       const res = await axiosInstance.post(
-        `${process.env.NEXT_PUBLIC_API_URL}/wallets`,
+        `${process.env.NEXT_PUBLIC_API_URL}/wallets/`,
         {
           address: address,
           risk_profile: riskProfile,
@@ -119,7 +119,7 @@ const Preferences = ({ address }: { address: string }) => {
       console.log("Skipping, defaulting to:", safeRiskProfile);
 
       const res = await axiosInstance.post(
-        `${process.env.NEXT_PUBLIC_API_URL}/wallets`,
+        `${process.env.NEXT_PUBLIC_API_URL}/wallets/`,
         {
           address: address,
           risk_profile: safeRiskProfile,
