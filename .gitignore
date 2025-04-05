@@ -73,6 +73,3 @@ yarn-error.log*
 # Output files
 output/
 tmp/
-
-# Environment files
-.env.example
