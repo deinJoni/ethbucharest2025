@@ -42,6 +42,67 @@ export function AgentOpinions({
     return null;
   };
 
+  // Enhanced function to parse markdown-style formatting
+  const parseMarkdown = (text: string) => {
+    if (!text) return [];
+
+    // Step 1: Split by line breaks to handle headers
+    const lines = text.split("\n");
+
+    return lines.map((line, lineIndex) => {
+      // Check for headers (e.g., ### Summarize:)
+      const headerMatch = line.match(/^(#{1,6})\s+(.+)$/);
+      if (headerMatch) {
+        const level = headerMatch[1].length; // Number of # symbols
+        const headerText = headerMatch[2];
+
+        return (
+          <div key={`line-${lineIndex}`} className="mb-2">
+            <h4 className={`text-${level === 3 ? "lg" : "base"} font-bold`}>
+              {headerText}
+            </h4>
+          </div>
+        );
+      }
+
+      // For non-header lines, parse bold text
+      if (line.includes("**")) {
+        // Split the line by ** markers
+        const parts = line.split(/(\*\*[^*]+\*\*)/g);
+
+        return (
+          <div
+            key={`line-${lineIndex}`}
+            className={lineIndex > 0 ? "mt-2" : ""}
+          >
+            {parts.map((part, partIndex) => {
+              // Check if this part is wrapped in ** (bold)
+              if (part.startsWith("**") && part.endsWith("**")) {
+                // Remove the ** markers and wrap in <strong>
+                const content = part.slice(2, -2);
+                return <strong key={`part-${partIndex}`}>{content}</strong>;
+              }
+              // Return regular text
+              return <span key={`part-${partIndex}`}>{part}</span>;
+            })}
+          </div>
+        );
+      }
+
+      // Handle empty lines as spacing
+      if (line.trim() === "") {
+        return <div key={`line-${lineIndex}`} className="h-2"></div>;
+      }
+
+      // Return regular text lines
+      return (
+        <div key={`line-${lineIndex}`} className={lineIndex > 0 ? "mt-2" : ""}>
+          {line}
+        </div>
+      );
+    });
+  };
+
   const renderAnalysisBlock = (title: string, content: string) => {
     return (
       <div className="p-4 bg-sky-50 rounded-lg">
@@ -51,7 +112,9 @@ export function AgentOpinions({
             {getRecommendationIcon(content)}
           </div>
         </div>
-        <p className="text-sm font-medium leading-relaxed">{content}</p>
+        <div className="text-sm font-medium leading-relaxed">
+          {parseMarkdown(content)}
+        </div>
       </div>
     );
   };
