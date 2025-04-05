@@ -116,8 +116,8 @@ A web3 application that provides portfolio management opinions about crypto asse
 - `PUT /wallets/risk-profile`: Update wallet risk profile
 
 ### Agent Endpoints
-- `/agents/`: Access to various AI trading agents
-- `/agents/analysis/{token}`: Get analysis for a specific token
+- `/api/v1/agents/`: Access to various AI trading agents
+- `/api/v1/agents/analysis/{token}`: Get analysis for a specific token
 
 ### Token Metrics
 - `/token-metrics/`: Access token metrics data

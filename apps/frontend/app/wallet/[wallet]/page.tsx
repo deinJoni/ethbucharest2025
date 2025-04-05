@@ -107,12 +107,12 @@ const WalletPage = () => {
 
         <WalletStatistics balance={formatEther(nativeBalance?.amount ?? 0)} />
 
-        <div className="w-full mt-8">
+        <div className="w-full mt-16">
           <h1 className="text-2xl font-bold mb-4">Your Tokens</h1>
           <TokensTable data={[...tokens]} />
         </div>
 
-        <div className="w-full">
+        <div className="w-full py-10">
           <h1 className="text-2xl font-bold mb-4">Search for a token and get AI analysis</h1>
           <TokenRedirectSelect />
         </div>
