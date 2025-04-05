@@ -11,7 +11,7 @@ const AnalystCard = ({ className }: { className?: string }) => {
                 <CardDescription></CardDescription>
             </CardHeader>
             <CardContent>
-                <Button disabled variant="outline" className="">Analyze whole portfolio</Button>
+                <Button disabled variant="outline" className="analyzeWholePortfolioButton">Analyze whole portfolio (coming soon)</Button>
             </CardContent>
         </Card>
     )
